@@ -309,6 +309,7 @@ export const fetchDatastoreFiles = async (datastoreId) => {
 // const BASE_URL = 'http://your-api-base-url.com'; // Replace with your actual API URL
 
 // // Demo credentials
+// Demo credentials
 // const DEMO_USERNAME = 'admin';
 // const DEMO_PASSWORD = 'admin123';
 
@@ -318,7 +319,9 @@ export const fetchDatastoreFiles = async (datastoreId) => {
 //     const base64Credentials = btoa(`${username}:${password}`);
 //     console.log('Base64 credentials:', base64Credentials);
 //     return {
-//       'Authorization': `Basic ${base64Credentials}`
+//       'Authorization': `Basic ${base64Credentials}`,
+//       'Content-Type': 'application/json',
+//       'Accept': 'application/json'
 //     };
 //   }
   
@@ -329,7 +332,9 @@ export const fetchDatastoreFiles = async (datastoreId) => {
 //   const base64Credentials = btoa(`${storedUsername}:${storedPassword}`);
 //   console.log('Using stored credentials base64:', base64Credentials);
 //   return {
-//     'Authorization': `Basic ${base64Credentials}`
+//     'Authorization': `Basic ${base64Credentials}`,
+//     'Content-Type': 'application/json',
+//     'Accept': 'application/json'
 //   };
 // };
 
@@ -337,8 +342,6 @@ export const fetchDatastoreFiles = async (datastoreId) => {
 // const isUsingDemoCredentials = (username, password) => {
 //   return username === DEMO_USERNAME && password === DEMO_PASSWORD;
 // };
-
-// // Import mock data
 
 // // Verify credentials
 // export const verifyCredentials = async (username, password) => {
@@ -353,7 +356,9 @@ export const fetchDatastoreFiles = async (datastoreId) => {
 //   try {
 //     const response = await fetch(`${BASE_URL}/datastores`, {
 //       method: 'GET',
-//       headers: getAuthHeaders(username, password)
+//       headers: getAuthHeaders(username, password),
+//       mode: 'cors',
+//       credentials: 'include'
 //     });
     
 //     console.log('Response status:', response.status);
@@ -391,7 +396,9 @@ export const fetchDatastoreFiles = async (datastoreId) => {
 //   try {
 //     const response = await fetch(`${BASE_URL}/datastores`, {
 //       method: 'GET',
-//       headers: getAuthHeaders()
+//       headers: getAuthHeaders(),
+//       mode: 'cors',
+//       credentials: 'include'
 //     });
 
 //     if (response.status === 401) {
@@ -426,7 +433,9 @@ export const fetchDatastoreFiles = async (datastoreId) => {
 //   try {
 //     const response = await fetch(`${BASE_URL}/datastores/${encodeURIComponent(datastoreId)}/files`, {
 //       method: 'GET',
-//       headers: getAuthHeaders()
+//       headers: getAuthHeaders(),
+//       mode: 'cors',
+//       credentials: 'include'
 //     });
 
 //     if (response.status === 401) {
