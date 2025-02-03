@@ -293,3 +293,151 @@ export const fetchDatastoreFiles = async (datastoreId) => {
 //     throw error;
 //   }
 // };
+
+
+
+
+
+
+
+
+
+//Code version 2
+// import { datastoreIds, datastoreFiles } from './mockData';
+
+// // API Base URL
+// const BASE_URL = 'http://your-api-base-url.com'; // Replace with your actual API URL
+
+// // Demo credentials
+// const DEMO_USERNAME = 'admin';
+// const DEMO_PASSWORD = 'admin123';
+
+// // Helper function to get auth headers
+// const getAuthHeaders = (username, password) => {
+//   if (username && password) {
+//     const base64Credentials = btoa(`${username}:${password}`);
+//     console.log('Base64 credentials:', base64Credentials);
+//     return {
+//       'Authorization': `Basic ${base64Credentials}`
+//     };
+//   }
+  
+//   const authData = localStorage.getItem('auth_data');
+//   if (!authData) return {};
+  
+//   const { username: storedUsername, password: storedPassword } = JSON.parse(authData);
+//   const base64Credentials = btoa(`${storedUsername}:${storedPassword}`);
+//   console.log('Using stored credentials base64:', base64Credentials);
+//   return {
+//     'Authorization': `Basic ${base64Credentials}`
+//   };
+// };
+
+// // Check if using demo credentials
+// const isUsingDemoCredentials = (username, password) => {
+//   return username === DEMO_USERNAME && password === DEMO_PASSWORD;
+// };
+
+// // Import mock data
+
+// // Verify credentials
+// export const verifyCredentials = async (username, password) => {
+//   console.log('Verifying credentials for username:', username);
+
+//   // Check for demo credentials
+//   if (isUsingDemoCredentials(username, password)) {
+//     console.log('Using demo credentials - bypassing API call');
+//     return { success: true, data: datastoreIds };
+//   }
+
+//   try {
+//     const response = await fetch(`${BASE_URL}/datastores`, {
+//       method: 'GET',
+//       headers: getAuthHeaders(username, password)
+//     });
+    
+//     console.log('Response status:', response.status);
+//     console.log('Response headers:', Object.fromEntries([...response.headers]));
+
+//     if (response.status === 401) {
+//       return { success: false, error: 'Invalid credentials' };
+//     }
+
+//     const data = await response.json();
+//     console.log('Response data:', data);
+//     return { success: true, data };
+//   } catch (error) {
+//     console.error('Credentials verification failed:', error);
+//     return { success: false, error: error.message };
+//   }
+// };
+
+// // Fetch datastore IDs
+// export const fetchDatastoreIds = async () => {
+//   const authData = localStorage.getItem('auth_data');
+//   if (!authData) {
+//     window.location.href = '/login';
+//     throw new Error('No auth data found');
+//   }
+
+//   const { username, password } = JSON.parse(authData);
+  
+//   // Return mock data for demo credentials
+//   if (isUsingDemoCredentials(username, password)) {
+//     console.log('Using demo credentials - returning mock datastores');
+//     return datastoreIds;
+//   }
+
+//   try {
+//     const response = await fetch(`${BASE_URL}/datastores`, {
+//       method: 'GET',
+//       headers: getAuthHeaders()
+//     });
+
+//     if (response.status === 401) {
+//       localStorage.removeItem('auth_data');
+//       window.location.href = '/login';
+//       throw new Error('Unauthorized');
+//     }
+
+//     return await response.json();
+//   } catch (error) {
+//     console.error('Failed to fetch datastore IDs:', error);
+//     throw error;
+//   }
+// };
+
+// // Fetch datastore files
+// export const fetchDatastoreFiles = async (datastoreId) => {
+//   const authData = localStorage.getItem('auth_data');
+//   if (!authData) {
+//     window.location.href = '/login';
+//     throw new Error('No auth data found');
+//   }
+
+//   const { username, password } = JSON.parse(authData);
+  
+//   // Return mock data for demo credentials
+//   if (isUsingDemoCredentials(username, password)) {
+//     console.log('Using demo credentials - returning mock files');
+//     return datastoreFiles[datastoreId] || { datastoreId, files: [] };
+//   }
+
+//   try {
+//     const response = await fetch(`${BASE_URL}/datastores/${encodeURIComponent(datastoreId)}/files`, {
+//       method: 'GET',
+//       headers: getAuthHeaders()
+//     });
+
+//     if (response.status === 401) {
+//       localStorage.removeItem('auth_data');
+//       window.location.href = '/login';
+//       throw new Error('Unauthorized');
+//     }
+
+//     return await response.json();
+//   } catch (error) {
+//     console.error('Failed to fetch datastore files:', error);
+//     throw error;
+//   }
+// };
