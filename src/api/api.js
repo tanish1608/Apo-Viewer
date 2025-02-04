@@ -450,3 +450,198 @@ export const fetchDatastoreFiles = async (datastoreId) => {
 //     throw error;
 //   }
 // };
+
+
+
+
+
+
+
+
+// Version 3
+// import { datastoreIds, datastoreFiles } from './mockData';
+
+// // API Base URL
+// const BASE_URL = 'https://mt-conn-core-api-dev.hk.hsbc:14100/api/sil/element-dna';
+
+// // Demo credentials
+// const DEMO_USERNAME = 'admin';
+// const DEMO_PASSWORD = 'admin123';
+
+// // Helper function to get auth headers
+// const getAuthHeaders = (username, password) => {
+//   if (username && password) {
+//     const base64Credentials = btoa(`${username}:${password}`);
+//     console.log('Base64 credentials:', base64Credentials);
+//     return {
+//       'Authorization': `Basic ${base64Credentials}`,
+//       'Content-Type': 'application/json',
+//       'Accept': 'application/json',
+//       'Access-Control-Allow-Origin': '*',
+//       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+//       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+//       'Access-Control-Allow-Credentials': 'true'
+//     };
+//   }
+  
+//   const authData = localStorage.getItem('auth_data');
+//   if (!authData) return {};
+  
+//   const { username: storedUsername, password: storedPassword } = JSON.parse(authData);
+//   const base64Credentials = btoa(`${storedUsername}:${storedPassword}`);
+//   console.log('Using stored credentials base64:', base64Credentials);
+//   return {
+//     'Authorization': `Basic ${base64Credentials}`,
+//     'Content-Type': 'application/json',
+//     'Accept': 'application/json',
+//     'Access-Control-Allow-Origin': '*',
+//     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+//     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+//     'Access-Control-Allow-Credentials': 'true'
+//   };
+// };
+
+// // Check if using demo credentials
+// const isUsingDemoCredentials = (username, password) => {
+//   return username === DEMO_USERNAME && password === DEMO_PASSWORD;
+// };
+
+// // Handle preflight request
+// const handlePreflightRequest = async (url, options) => {
+//   try {
+//     // First, send OPTIONS request
+//     const preflightResponse = await fetch(url, {
+//       method: 'OPTIONS',
+//       headers: {
+//         ...options.headers,
+//         'Access-Control-Request-Method': options.method,
+//         'Access-Control-Request-Headers': 'authorization,content-type'
+//       },
+//       mode: 'cors'
+//     });
+
+//     if (!preflightResponse.ok) {
+//       throw new Error('Preflight request failed');
+//     }
+
+//     // Then send actual request
+//     return await fetch(url, {
+//       ...options,
+//       mode: 'cors'
+//     });
+//   } catch (error) {
+//     console.error('Request failed:', error);
+//     throw error;
+//   }
+// };
+
+// // Verify credentials
+// export const verifyCredentials = async (username, password) => {
+//   console.log('Verifying credentials for username:', username);
+
+//   // Check for demo credentials
+//   if (isUsingDemoCredentials(username, password)) {
+//     console.log('Using demo credentials - bypassing API call');
+//     return { success: true, data: datastoreIds };
+//   }
+
+//   try {
+//     const options = {
+//       method: 'GET',
+//       headers: getAuthHeaders(username, password)
+//     };
+
+//     const response = await handlePreflightRequest(`${BASE_URL}/datastores`, options);
+    
+//     console.log('Response status:', response.status);
+//     console.log('Response headers:', Object.fromEntries([...response.headers]));
+
+//     if (response.status === 401) {
+//       return { success: false, error: 'Invalid credentials' };
+//     }
+
+//     const data = await response.json();
+//     console.log('Response data:', data);
+//     return { success: true, data };
+//   } catch (error) {
+//     console.error('Credentials verification failed:', error);
+//     return { success: false, error: error.message };
+//   }
+// };
+
+// // Fetch datastore IDs
+// export const fetchDatastoreIds = async () => {
+//   const authData = localStorage.getItem('auth_data');
+//   if (!authData) {
+//     window.location.href = '/login';
+//     throw new Error('No auth data found');
+//   }
+
+//   const { username, password } = JSON.parse(authData);
+  
+//   // Return mock data for demo credentials
+//   if (isUsingDemoCredentials(username, password)) {
+//     console.log('Using demo credentials - returning mock datastores');
+//     return datastoreIds;
+//   }
+
+//   try {
+//     const options = {
+//       method: 'GET',
+//       headers: getAuthHeaders()
+//     };
+
+//     const response = await handlePreflightRequest(`${BASE_URL}/datastores`, options);
+
+//     if (response.status === 401) {
+//       localStorage.removeItem('auth_data');
+//       window.location.href = '/login';
+//       throw new Error('Unauthorized');
+//     }
+
+//     return await response.json();
+//   } catch (error) {
+//     console.error('Failed to fetch datastore IDs:', error);
+//     throw error;
+//   }
+// };
+
+// // Fetch datastore files
+// export const fetchDatastoreFiles = async (datastoreId) => {
+//   const authData = localStorage.getItem('auth_data');
+//   if (!authData) {
+//     window.location.href = '/login';
+//     throw new Error('No auth data found');
+//   }
+
+//   const { username, password } = JSON.parse(authData);
+  
+//   // Return mock data for demo credentials
+//   if (isUsingDemoCredentials(username, password)) {
+//     console.log('Using demo credentials - returning mock files');
+//     return datastoreFiles[datastoreId] || { datastoreId, files: [] };
+//   }
+
+//   try {
+//     const options = {
+//       method: 'GET',
+//       headers: getAuthHeaders()
+//     };
+
+//     const response = await handlePreflightRequest(
+//       `${BASE_URL}/datastores/${encodeURIComponent(datastoreId)}/files`, 
+//       options
+//     );
+
+//     if (response.status === 401) {
+//       localStorage.removeItem('auth_data');
+//       window.location.href = '/login';
+//       throw new Error('Unauthorized');
+//     }
+
+//     return await response.json();
+//   } catch (error) {
+//     console.error('Failed to fetch datastore files:', error);
+//     throw error;
+//   }
+// };
