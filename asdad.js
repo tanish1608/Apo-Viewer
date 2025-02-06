@@ -62,9 +62,9 @@ app.get('/datastores', async (req, res) => {
   }
 });
 
-// Route to fetch datastore files
+// Route// Update the datastore files endpoint to handle where and sortBy parameters
 app.get('/datastores/:id/files', async (req, res) => {
-  const { username, password } = req.query;
+  const { username, password, where, sortBy } = req.query;
   const { id } = req.params;
 
   if (!username || !password) {
@@ -72,7 +72,14 @@ app.get('/datastores/:id/files', async (req, res) => {
   }
 
   try {
-    const response = await fetch(`${BASE_URL}/datastores/${encodeURIComponent(id)}/files`, {
+    // Build the query string for the API
+    const queryParams = new URLSearchParams();
+    if (where) queryParams.append('where', where);
+    if (sortBy) queryParams.append('sortBy', sortBy);
+    
+    const apiUrl = `${BASE_URL}/datastores/${encodeURIComponent(id)}/files${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    
+    const response = await fetch(apiUrl, {
       method: 'GET',
       headers: getAuthHeaders(username, password),
       agent
@@ -89,8 +96,4 @@ app.get('/datastores/:id/files', async (req, res) => {
     console.error('Error fetching datastore files:', error);
     res.status(500).json({ error: 'Failed to fetch datastore files' });
   }
-});
-
-app.listen(PORT, () => {
-  console.log(`Proxy server running on port ${PORT}`);
 });

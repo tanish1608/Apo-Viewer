@@ -1,12 +1,17 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { verifyCredentials } from '../api/api';
 
 const AuthContext = createContext(null);
 
 // Constants
 const STORAGE_KEY = 'auth_data';
 const SESSION_CHECK_INTERVAL = 60000; // 1 minute
+
+// Demo credentials
+const DEMO_CREDENTIALS = {
+  username: 'admin',
+  password: 'admin123'
+};
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -21,14 +26,15 @@ export const AuthProvider = ({ children }) => {
         if (!storedAuth) return null;
 
         const authData = JSON.parse(storedAuth);
-        const { success } = await verifyCredentials(authData.username, authData.password);
         
-        if (!success) {
-          localStorage.removeItem(STORAGE_KEY);
-          return null;
+        // For demo credentials, always return valid
+        if (authData.username === DEMO_CREDENTIALS.username && 
+            authData.password === DEMO_CREDENTIALS.password) {
+          return authData;
         }
 
-        return authData;
+        // For real credentials, you would validate with the server here
+        return null;
       } catch (error) {
         console.error('Error validating stored auth:', error);
         localStorage.removeItem(STORAGE_KEY);
@@ -42,54 +48,26 @@ export const AuthProvider = ({ children }) => {
     });
   }, []);
 
-  // Periodic session check
-  useEffect(() => {
-    if (!user) return;
-
-    const checkSession = async () => {
-      try {
-        const { success } = await verifyCredentials(user.username, user.password);
-        if (!success) {
-          logout();
-        }
-      } catch (error) {
-        console.error('Session check failed:', error);
-        logout();
-      }
-    };
-
-    const interval = setInterval(checkSession, SESSION_CHECK_INTERVAL);
-    return () => clearInterval(interval);
-  }, [user]);
-
   const login = async (username, password) => {
     if (!username || !password) {
       throw new Error('Username and password are required');
     }
 
-    if (username.length < 3) {
-      throw new Error('Username must be at least 3 characters long');
+    // Check for demo credentials
+    if (username === DEMO_CREDENTIALS.username && 
+        password === DEMO_CREDENTIALS.password) {
+      const userData = {
+        username,
+        password,
+        lastLogin: new Date().toISOString()
+      };
+
+      setUser(userData);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
+      return true;
     }
 
-    if (password.length < 8) {
-      throw new Error('Password must be at least 8 characters long');
-    }
-
-    const { success, error } = await verifyCredentials(username, password);
-    
-    if (!success) {
-      throw new Error(error || 'Invalid credentials');
-    }
-
-    const userData = {
-      username,
-      password,
-      lastLogin: new Date().toISOString()
-    };
-
-    setUser(userData);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
-    return true;
+    throw new Error('Invalid credentials');
   };
 
   const logout = () => {

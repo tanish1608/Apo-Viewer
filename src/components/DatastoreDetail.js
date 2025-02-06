@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx';
 
 // Constants
 const ITEMS_PER_PAGE = 50;
+const SEARCH_DEBOUNCE_MS = 300;
 const EXPORT_BATCH_SIZE = 1000;
 
 // Date presets
@@ -18,6 +19,7 @@ const DATE_PRESETS = [
 
 function DatastoreDetail() {
   // Refs for optimization
+  const searchDebounceTimer = useRef(null);
   const tableRef = useRef(null);
   
   // State
@@ -72,7 +74,7 @@ function DatastoreDetail() {
         ...prev,
         search: searchInput.toLowerCase()
       }));
-    }, 500); // Increased debounce time for better performance
+    }, 500);
 
     return () => clearTimeout(timer);
   }, [searchInput]);
@@ -83,7 +85,21 @@ function DatastoreDetail() {
       try {
         setLoading(true);
         setError(null);
-        const data = await fetchDatastoreFiles(decodeURIComponent(id));
+        
+        // Get query parameters
+        const searchParams = new URLSearchParams(window.location.search);
+        const where = searchParams.get('where');
+        const sortBy = searchParams.get('sortBy');
+        
+        // Build the query string for the API
+        const queryParams = new URLSearchParams();
+        if (where) queryParams.append('where', where);
+        if (sortBy) queryParams.append('sortBy', sortBy);
+        
+        const data = await fetchDatastoreFiles(
+          decodeURIComponent(id),
+          queryParams.toString()
+        );
         
         if (!data?.files || !Array.isArray(data.files)) {
           throw new Error('Invalid data format received');
@@ -107,7 +123,7 @@ function DatastoreDetail() {
           if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
           if (aIndex !== -1) return -1;
           if (bIndex !== -1) return 1;
-          return columnMap.get(b) - columnMap.get(a); // Sort by frequency
+          return columnMap.get(b) - columnMap.get(a);
         });
         
         setColumns(sortedColumns);
