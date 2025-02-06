@@ -80,7 +80,15 @@ function DatastoreDetail() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  // Data fetching
+  const getDatastoreName = useCallback((id) => {
+    if (id.includes(',')) {
+      return 'Multiple Datastores';
+    }
+    const parts = id.split('.');
+    return parts[parts.length - 1];
+  }, []);
+
+  // Update the columns detection to include datastoreId
   useEffect(() => {
     const loadFiles = async () => {
       try {
@@ -110,6 +118,9 @@ function DatastoreDetail() {
         
         // Optimize column detection for large datasets
         const columnMap = new Map();
+        // Always include datastoreId column first
+        columnMap.set('datastoreId', data.files.length);
+        
         data.files.slice(0, 100).forEach(file => {
           Object.keys(file).forEach(key => {
             columnMap.set(key, (columnMap.get(key) || 0) + 1);
@@ -117,6 +128,9 @@ function DatastoreDetail() {
         });
 
         const sortedColumns = Array.from(columnMap.keys()).sort((a, b) => {
+          if (a === 'datastoreId') return -1;
+          if (b === 'datastoreId') return 1;
+          
           const priority = ['fileName', 'fileType', 'status', 'clientName', 'direction', 'clientConnection'];
           const aIndex = priority.indexOf(a);
           const bIndex = priority.indexOf(b);
@@ -214,11 +228,6 @@ function DatastoreDetail() {
       setExportLoading(false);
     }
   }, [filteredFiles, columns, id]);
-
-  const getDatastoreName = useCallback((id) => {
-    const parts = id.split('.');
-    return parts[parts.length - 1];
-  }, []);
 
   const downloadCSV = useCallback(() => {
     const csvContent = [
@@ -398,7 +407,7 @@ function DatastoreDetail() {
       )}
       
       <div className="header-section">
-        <Link to="/" className="back-link">← Back to Datastores</Link>
+        <Link to="/" className="back-link">← Back to Search</Link>
         <div className="export-buttons">
           <button 
             className="export-button excel" 

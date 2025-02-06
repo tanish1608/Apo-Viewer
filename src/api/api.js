@@ -31,7 +31,7 @@ const makeRequest = async (url, options) => {
 };
 
 // Fetch datastore files
-export const fetchDatastoreFiles = async (datastoreId, queryString = '') => {
+export const fetchDatastoreFiles = async (datastoreIds, queryString = '') => {
   const authData = localStorage.getItem('auth_data');
   if (!authData) {
     window.location.href = '/login';
@@ -40,22 +40,78 @@ export const fetchDatastoreFiles = async (datastoreId, queryString = '') => {
 
   const { username, password } = JSON.parse(authData);
   
+  // Split the datastoreIds string into an array
+  const datastoreIdArray = datastoreIds.split(',').map(id => id.trim());
+  
   // Return mock data for demo credentials
   if (isUsingDemoCredentials(username, password)) {
     console.log('Using demo credentials - returning mock files');
-    // If the datastoreId exists in mock data, return it, otherwise return empty files array
-    return datastoreFiles[datastoreId] || { datastoreId, files: [] };
+    // Combine files from all requested datastores
+    const combinedFiles = datastoreIdArray.reduce((acc, id) => {
+      const datastoreData = datastoreFiles[id];
+      if (datastoreData && datastoreData.files) {
+        // Add a datastoreId field to each file
+        const filesWithSource = datastoreData.files.map(file => ({
+          ...file,
+          datastoreId: id
+        }));
+        acc.push(...filesWithSource);
+      }
+      return acc;
+    }, []);
+
+    // Sort combined files by processingEndDate
+    return {
+      files: combinedFiles.sort((a, b) => {
+        const dateA = a.processingEndDate ? parseInt(a.processingEndDate) : 0;
+        const dateB = b.processingEndDate ? parseInt(b.processingEndDate) : 0;
+        return dateB - dateA;
+      })
+    };
   }
 
   try {
-    // Build the URL with authentication and additional query parameters
-    const params = new URLSearchParams(queryString);
-    params.append('username', username);
-    params.append('password', password);
+    // Parse the query string to get individual datastore parameters
+    const searchParams = new URLSearchParams(queryString);
     
-    return await makeRequest(
-      `${BASE_URL}/datastores/${encodeURIComponent(datastoreId)}/files?${params.toString()}`
+    // Fetch files from each datastore with its specific parameters
+    const responses = await Promise.all(
+      datastoreIdArray.map(id => {
+        const params = new URLSearchParams();
+        params.append('username', username);
+        params.append('password', password);
+        
+        // Add datastore-specific parameters
+        const where = searchParams.get(`where_${id}`);
+        const sortBy = searchParams.get(`sortBy_${id}`);
+        if (where) params.append('where', where);
+        if (sortBy) params.append('sortBy', sortBy);
+        
+        return makeRequest(
+          `${BASE_URL}/datastores/${encodeURIComponent(id)}/files?${params.toString()}`
+        );
+      })
     );
+
+    // Combine all files and add datastoreId to each file
+    const combinedFiles = responses.flatMap((response, index) => {
+      if (response.files) {
+        return response.files.map(file => ({
+          ...file,
+          datastoreId: datastoreIdArray[index]
+        }));
+      }
+      return [];
+    });
+
+    // Sort combined files by processingEndDate
+    return {
+      files: combinedFiles.sort((a, b) => {
+        const dateA = a.processingEndDate ? parseInt(a.processingEndDate) : 0;
+        const dateB = b.processingEndDate ? parseInt(b.processingEndDate) : 0;
+        return dateB - dateA;
+      })
+    };
   } catch (error) {
     console.error('Failed to fetch datastore files:', error);
     if (error.message.includes('401')) {

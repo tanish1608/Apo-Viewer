@@ -1,0 +1,234 @@
+/* DatastoreList Container */
+.container {
+  max-width: 1200px;
+  margin: 40px auto;
+  padding: 0 20px;
+}
+
+/* Title */
+h1 {
+  text-align: center;
+  color: #1a202c;
+  margin-bottom: 32px;
+  font-size: 28px;
+  font-weight: 600;
+}
+
+/* Search Form Container */
+.search-form-container {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  padding: 32px;
+  margin-bottom: 24px;
+  transition: all 0.3s ease;
+}
+
+.search-form-container form {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.search-form-container:hover {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Error message should span full width */
+.error-message {
+  grid-column: 1 / -1;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+/* Datastore Box */
+.datastore-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px;
+  transition: all 0.2s ease;
+  height: fit-content;
+}
+
+.datastore-box:hover {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+}
+
+/* Datastore Header */
+.datastore-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.datastore-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.remove-button {
+  background: none;
+  border: none;
+  color: #ef4444;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+}
+
+.remove-button:hover {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+/* Form Groups */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #475569;
+  margin-bottom: 6px;
+}
+
+.form-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #1e293b;
+  transition: all 0.2s ease;
+  background: white;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.form-input::placeholder {
+  color: #94a3b8;
+}
+
+/* Help Text */
+.help-text {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+/* Button Container - spans full width */
+.button-container {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+/* Add Datastore Button */
+.add-datastore-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.add-datastore-button:hover {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+/* Submit Button */
+.submit-button {
+  flex: 1;
+  padding: 8px 20px;
+  background: #3b82f6;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.submit-button:hover {
+  background: #2563eb;
+}
+
+/* Animation for adding/removing datastores */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.datastore-box {
+  animation: slideIn 0.3s ease-out;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+  .search-form-container form {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .search-form-container form {
+    grid-template-columns: 1fr;
+  }
+
+  .container {
+    padding: 0 16px;
+    margin: 24px auto;
+  }
+
+  .search-form-container {
+    padding: 24px;
+  }
+
+  .datastore-box {
+    padding: 16px;
+  }
+
+  .button-container {
+    flex-direction: column;
+  }
+
+  .add-datastore-button,
+  .submit-button {
+    width: 100%;
+  }
+}
