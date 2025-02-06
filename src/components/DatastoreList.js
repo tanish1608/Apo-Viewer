@@ -37,23 +37,20 @@ function DatastoreList() {
       return;
     }
 
-    const searchParams = validFields.map(field => ({
-      id: encodeURIComponent(field.datastoreId.trim()),
-      where: field.whereClause.trim(),
-      sortBy: field.sortBy.trim()
-    }));
+    // Build the query string with where and sortBy parameters
+    const queryParams = new URLSearchParams();
+    validFields.forEach(field => {
+      const id = field.datastoreId.trim();
+      if (field.whereClause.trim()) {
+        queryParams.append('where', field.whereClause.trim());
+      }
+      if (field.sortBy.trim()) {
+        queryParams.append('sortBy', field.sortBy.trim());
+      }
+    });
 
-    const queryString = searchParams
-      .map(params => {
-        const query = new URLSearchParams();
-        if (params.where) query.append(`where_${params.id}`, params.where);
-        if (params.sortBy) query.append(`sortBy_${params.id}`, params.sortBy);
-        return query.toString();
-      })
-      .filter(Boolean)
-      .join('&');
-
-    const datastoreIds = searchParams.map(params => params.id).join(',');
+    const datastoreIds = validFields.map(field => encodeURIComponent(field.datastoreId.trim())).join(',');
+    const queryString = queryParams.toString();
     navigate(`/datastore/${datastoreIds}${queryString ? `?${queryString}` : ''}`);
   };
 
