@@ -29,4 +29,23 @@ fetch(apiUrl, {
   })
   .then(data => console.log("Response Data:", data))
   .catch(error => console.error("Fetch Error:", error.message || "Unknown Error"));
+
+
+
+
+
+
+
+
+// Function to process and parse JSON responses
+const processResponse = async (response) => {
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    console.error('Error parsing JSON:', error);
+    throw new Error('Invalid JSON response from server');
+  }
+};
+
 ```
