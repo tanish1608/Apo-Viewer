@@ -7,6 +7,7 @@ import * as XLSX from 'xlsx';
 const ITEMS_PER_PAGE = 50;
 const SEARCH_DEBOUNCE_MS = 300;
 const EXPORT_BATCH_SIZE = 1000;
+const MAX_CELL_LENGTH = 100;
 
 // Date presets
 const DATE_PRESETS = [
@@ -369,6 +370,16 @@ function DatastoreDetail() {
     </div>
   );
 
+  // Add this new function to format cell content
+  const formatCellContent = (content) => {
+    if (content === null || content === undefined) return '-';
+    const stringContent = content.toString();
+    if (stringContent.length > MAX_CELL_LENGTH) {
+      return '[Content too long to display]';
+    }
+    return stringContent;
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -538,16 +549,16 @@ function DatastoreDetail() {
                     {column === 'fileName' ? (
                       <div className="file-cell">
                         <i className="fas fa-file-alt file-icon"></i>
-                        <span>{file[column] || '-'}</span>
+                        <span>{formatCellContent(file[column])}</span>
                       </div>
                     ) : column === 'status' ? (
                       <span className={`status-badge ${(file[column] || '').toLowerCase()}`}>
-                        {file[column] || '-'}
+                        {formatCellContent(file[column])}
                       </span>
                     ) : column === 'processingEndDate' ? (
                       <span>{formatDate(file[column])}</span>
                     ) : (
-                      <span>{file[column]?.toString() || '-'}</span>
+                      <span>{formatCellContent(file[column])}</span>
                     )}
                   </td>
                 ))}
