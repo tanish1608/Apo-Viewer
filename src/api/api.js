@@ -1,18 +1,7 @@
-import { datastoreFiles } from './mockData';
+import { mockData } from './mockData';
 
 // API Base URL (proxy server)
 const BASE_URL = 'http://localhost:5000';
-
-// Demo credentials
-const DEMO_CREDENTIALS = {
-  username: 'admin',
-  password: 'admin123'
-};
-
-// Check if using demo credentials
-const isUsingDemoCredentials = (username, password) => {
-  return username === DEMO_CREDENTIALS.username && password === DEMO_CREDENTIALS.password;
-};
 
 // Make API request through proxy
 const makeRequest = async (url, options) => {
@@ -30,53 +19,9 @@ const makeRequest = async (url, options) => {
   }
 };
 
-// Verify credentials
-export const verifyCredentials = async (username, password) => {
-  if (isUsingDemoCredentials(username, password)) {
-    return { success: true };
-  }
-
-  try {
-    const response = await makeRequest(
-      `${BASE_URL}/datastores?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
-    );
-    return { success: true, data: response };
-  } catch (error) {
-    console.error('Credentials verification failed:', error);
-    return { success: false, error: error.message };
-  }
-};
-
-// Fetch datastore IDs
-export const fetchDatastoreIds = async () => {
-  const authData = localStorage.getItem('auth_data');
-  if (!authData) {
-    window.location.href = '/login';
-    throw new Error('No auth data found');
-  }
-
-  const { username, password } = JSON.parse(authData);
-  
-  if (isUsingDemoCredentials(username, password)) {
-    return Object.keys(datastoreFiles).map(id => ({
-      id,
-      creationTime: Date.now().toString(),
-      publishActionType: 'MOCK'
-    }));
-  }
-
-  try {
-    return await makeRequest(
-      `${BASE_URL}/datastores?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
-    );
-  } catch (error) {
-    console.error('Failed to fetch datastore IDs:', error);
-    if (error.message.includes('401')) {
-      localStorage.removeItem('auth_data');
-      window.location.href = '/login';
-    }
-    throw error;
-  }
+// Check if using demo credentials
+const isUsingDemoCredentials = (username, password) => {
+  return username === 'admin' && password === 'admin123';
 };
 
 // Fetch files from a single datastore
@@ -85,22 +30,34 @@ const fetchSingleDatastore = async (datastoreId, username, password, where, sort
     const params = new URLSearchParams();
     params.append('username', username);
     params.append('password', password);
-    if (where) params.append('where', where);
-    if (sortBy) params.append('sortBy', sortBy);
+    if (where && where[datastoreId]) {
+      params.append('where', where[datastoreId]);
+    }
+    if (sortBy && sortBy[datastoreId]) {
+      params.append('sortBy', sortBy[datastoreId]);
+    }
 
     const response = await makeRequest(
       `${BASE_URL}/datastores/${encodeURIComponent(datastoreId)}/files?${params.toString()}`
     );
 
-    // Add datastoreId to each file
-    return response.files.map(file => ({
-      ...file,
-      datastoreId,
-      processingEndDate: file.processingEndDate ? parseInt(file.processingEndDate) : 0
-    }));
+    // Add datastoreId to each element in the array
+    if (response?.element && Array.isArray(response.element)) {
+      return {
+        ...response,
+        element: response.element.map(item => ({
+          ...item,
+          datastoreId,
+          creationTime: item.creationTime ? parseInt(item.creationTime) : null,
+          expirationTime: item.expirationTime === -1 ? null : parseInt(item.expirationTime)
+        }))
+      };
+    }
+
+    return { element: [] };
   } catch (error) {
     console.error(`Failed to fetch files for datastore ${datastoreId}:`, error);
-    return []; // Return empty array on error to continue with other datastores
+    return { element: [] }; // Return empty array on error to continue with other datastores
   }
 };
 
@@ -119,40 +76,66 @@ export const fetchDatastoreFiles = async (datastoreIds, queryString = '') => {
   if (isUsingDemoCredentials(username, password)) {
     console.log('Using demo credentials - returning mock files');
     const mockFiles = datastoreIdArray.flatMap(id => {
-      const datastoreData = datastoreFiles[id];
+      const datastoreData = mockData[id];
       if (!datastoreData?.files) return [];
       
       return datastoreData.files.map(file => ({
         ...file,
         datastoreId: id,
-        processingEndDate: file.processingEndDate ? parseInt(file.processingEndDate) : 0
+        creationTime: file.creationTime ? parseInt(file.creationTime) : null,
+        expirationTime: file.expirationTime === -1 ? null : parseInt(file.expirationTime)
       }));
     });
 
     return {
-      files: mockFiles.sort((a, b) => b.processingEndDate - a.processingEndDate)
+      element: mockFiles.sort((a, b) => (b.creationTime || 0) - (a.creationTime || 0))
     };
   }
 
   try {
-    // Parse query parameters
+    // Parse query parameters into a map of datastore-specific conditions
     const searchParams = new URLSearchParams(queryString);
-    const where = searchParams.get('where');
-    const sortBy = searchParams.get('sortBy');
+    const whereConditions = {};
+    const sortByConditions = {};
     
-    // Fetch all datastores in parallel with the same where and sortBy
-    const allFiles = await Promise.all(
+    // Get all where and sortBy parameters
+    searchParams.getAll('where').forEach((where, index) => {
+      if (index < datastoreIdArray.length) {
+        whereConditions[datastoreIdArray[index]] = where;
+      }
+    });
+    
+    searchParams.getAll('sortBy').forEach((sortBy, index) => {
+      if (index < datastoreIdArray.length) {
+        sortByConditions[datastoreIdArray[index]] = sortBy;
+      }
+    });
+    
+    // Fetch all datastores in parallel with their specific conditions
+    const responses = await Promise.all(
       datastoreIdArray.map(datastoreId => 
-        fetchSingleDatastore(datastoreId, username, password, where, sortBy)
+        fetchSingleDatastore(
+          datastoreId,
+          username,
+          password,
+          whereConditions,
+          sortByConditions
+        )
       )
     );
 
-    // Combine and sort all files
-    const combinedFiles = allFiles.flat();
-
-    return {
-      files: combinedFiles.sort((a, b) => b.processingEndDate - a.processingEndDate)
+    // Combine all responses
+    const combinedResponse = {
+      element: responses.flatMap(response => response.element || []),
+      hasMore: responses.some(response => response.hasMore),
+      superCount: responses.reduce((sum, response) => sum + (response.superCount || 0), 0),
+      type: responses[0]?.type || "undefined"
     };
+
+    // Sort combined results by creationTime
+    combinedResponse.element.sort((a, b) => (b.creationTime || 0) - (a.creationTime || 0));
+
+    return combinedResponse;
   } catch (error) {
     console.error('Failed to fetch datastore files:', error);
     if (error.message.includes('401')) {
@@ -160,5 +143,29 @@ export const fetchDatastoreFiles = async (datastoreIds, queryString = '') => {
       window.location.href = '/login';
     }
     throw error;
+  }
+};
+
+// Verify credentials
+export const verifyCredentials = async (username, password) => {
+  console.log('Verifying credentials for username:', username);
+
+  // Check for demo credentials
+  if (isUsingDemoCredentials(username, password)) {
+    console.log('Using demo credentials - bypassing API call');
+    return { success: true, data: mockData };
+  }
+
+  try {
+    const data = await makeRequest(
+      `${BASE_URL}/datastores?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+    );
+    return { success: true, data };
+  } catch (error) {
+    console.error('Credentials verification failed:', error);
+    if (error.message.includes('401')) {
+      return { success: false, error: 'Invalid credentials' };
+    }
+    return { success: false, error: error.message };
   }
 };
