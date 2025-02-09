@@ -62,7 +62,7 @@ app.get('/datastores', async (req, res) => {
   }
 });
 
-// Route// Update the datastore files endpoint to handle where and sortBy parameters
+// Update the datastore files endpoint to handle where and sortBy parameters
 app.get('/datastores/:id/files', async (req, res) => {
   const { username, password, where, sortBy } = req.query;
   const { id } = req.params;

@@ -37,10 +37,9 @@ function DatastoreList() {
       return;
     }
 
-    // Build the query string with where and sortBy parameters
+    // Build the query string with where and sortBy parameters for each datastore
     const queryParams = new URLSearchParams();
     validFields.forEach(field => {
-      const id = field.datastoreId.trim();
       if (field.whereClause.trim()) {
         queryParams.append('where', field.whereClause.trim());
       }

@@ -2,6 +2,9 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom';
 import { fetchDatastoreFiles } from '../api/api';
 import * as XLSX from 'xlsx';
+import '../styles/Sort.css';
+import '../styles/ColumnSelector.css';
+import { mockData } from '../api/mockData';
 
 // Constants
 const ITEMS_PER_PAGE = 50;
@@ -21,6 +24,9 @@ function DatastoreDetail() {
   // Refs for optimization
   const searchDebounceTimer = useRef(null);
   const tableRef = useRef(null);
+  const sortMenuRef = useRef(null);
+  const columnSelectorRef = useRef(null);
+  const filterRef = useRef(null);
   
   // State
   const { id } = useParams();
@@ -29,9 +35,17 @@ function DatastoreDetail() {
   const [exportLoading, setExportLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  const [showColumnSelector, setShowColumnSelector] = useState(false);
   const [columns, setColumns] = useState([]);
+  const [visibleColumns, setVisibleColumns] = useState([]);
+  const [columnOrder, setColumnOrder] = useState([]); // Add this new state
   const [error, setError] = useState(null);
   const [searchInput, setSearchInput] = useState('');
+  const [sortConfig, setSortConfig] = useState({
+    field: '',
+    direction: 'desc'
+  });
   const [filters, setFilters] = useState({
     dateRange: {
       start: '',
@@ -44,6 +58,31 @@ function DatastoreDetail() {
     clientName: '',
     search: ''
   });
+
+  // Combine all click outside handlers into one effect
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (sortMenuRef.current && !sortMenuRef.current.contains(event.target)) {
+        setShowSortMenu(false);
+      }
+      if (columnSelectorRef.current && !columnSelectorRef.current.contains(event.target)) {
+        setShowColumnSelector(false);
+      }
+      if (filterRef.current && !filterRef.current.contains(event.target)) {
+        setShowFilters(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Initialize visible columns when columns are set
+  useEffect(() => {
+    setVisibleColumns(columns);
+  }, [columns]);
 
   // Add this helper function for date formatting
   const formatDate = (date) => {
@@ -79,109 +118,214 @@ function DatastoreDetail() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  // Data fetching
+  // Data fetching with cleanup
   useEffect(() => {
+    let mounted = true;
+
     const loadFiles = async () => {
+      if (!mounted) return;
+
       try {
         setLoading(true);
         setError(null);
         
-        // Get query parameters
-        const searchParams = new URLSearchParams(window.location.search);
-        const where = searchParams.get('where');
-        const sortBy = searchParams.get('sortBy');
+        let data;
         
-        // Build the query string for the API
-        const queryParams = new URLSearchParams();
-        if (where) queryParams.append('where', where);
-        if (sortBy) queryParams.append('sortBy', sortBy);
-        
-        const data = await fetchDatastoreFiles(
-          decodeURIComponent(id),
-          queryParams.toString()
-        );
-        
-        if (!data?.files || !Array.isArray(data.files)) {
+        if (id.toLowerCase().includes('mock')) {
+          const mockDatastore = Object.values(mockData).find(store => 
+            store.datastoreId.toLowerCase().includes('mock') ||
+            store.datastoreId === id
+          );
+          
+          if (!mockDatastore) {
+            const firstMockDatastore = Object.values(mockData)[0];
+            if (!firstMockDatastore) {
+              throw new Error('No mock data available');
+            }
+            data = { element: firstMockDatastore.files };
+          } else {
+            data = { element: mockDatastore.files };
+          }
+        } else {
+          const searchParams = new URLSearchParams(window.location.search);
+          const where = searchParams.get('where');
+          const sortBy = searchParams.get('sortBy');
+          
+          const queryParams = new URLSearchParams();
+          if (where) queryParams.append('where', where);
+          if (sortBy) queryParams.append('sortBy', sortBy);
+          
+          data = await fetchDatastoreFiles(
+            decodeURIComponent(id),
+            queryParams.toString()
+          );
+        }
+
+        if (!mounted) return;
+
+        if (!data?.element || !Array.isArray(data.element)) {
           throw new Error('Invalid data format received');
         }
 
-        setFiles(data.files);
+        setFiles(data.element);
         
-        // Optimize column detection for large datasets
-        const columnMap = new Map();
-        data.files.slice(0, 100).forEach(file => {
-          Object.keys(file).forEach(key => {
-            columnMap.set(key, (columnMap.get(key) || 0) + 1);
+        if (mounted && data.element.length > 0) {
+          const columnMap = new Map();
+          data.element.slice(0, 100).forEach(file => {
+            Object.keys(file).forEach(key => {
+              columnMap.set(key, (columnMap.get(key) || 0) + 1);
+            });
           });
-        });
 
-        const sortedColumns = Array.from(columnMap.keys()).sort((a, b) => {
+          // Define priority columns
           const priority = ['fileName', 'fileType', 'status', 'clientName', 'direction', 'clientConnection'];
-          const aIndex = priority.indexOf(a);
-          const bIndex = priority.indexOf(b);
           
-          if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
-          if (aIndex !== -1) return -1;
-          if (bIndex !== -1) return 1;
-          return columnMap.get(b) - columnMap.get(a);
-        });
-        
-        setColumns(sortedColumns);
+          // Sort columns maintaining priority
+          const sortedColumns = Array.from(columnMap.keys()).sort((a, b) => {
+            const aIndex = priority.indexOf(a);
+            const bIndex = priority.indexOf(b);
+            
+            if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+            if (aIndex !== -1) return -1;
+            if (bIndex !== -1) return 1;
+            return columnMap.get(b) - columnMap.get(a);
+          });
+          
+          setColumns(sortedColumns);
+          setColumnOrder(sortedColumns); // Store the original order
+          setVisibleColumns(sortedColumns);
+        }
       } catch (error) {
-        console.error('Error fetching files:', error);
-        setError('Failed to load files. Please try again.');
+        if (mounted) {
+          console.error('Error fetching files:', error);
+          setError('Failed to load files. Please try again.');
+        }
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
     loadFiles();
+
+    return () => {
+      mounted = false;
+    };
   }, [id]);
+
+  // Update the sort handler
+  const handleSort = (field) => {
+    if (field === 'clear') {
+      setSortConfig({
+        field: 'creationTime',
+        direction: 'desc'
+      });
+    } else {
+      setSortConfig(prev => ({
+        field,
+        direction: prev.field === field && prev.direction === 'desc' ? 'asc' : 'desc'
+      }));
+    }
+    setShowSortMenu(false);
+  };
+
+  // Update the toggleColumn function
+  const toggleColumn = (column) => {
+    setVisibleColumns(prev => {
+      if (prev.includes(column)) {
+        // Remove the column
+        return prev.filter(col => col !== column);
+      } else {
+        // Add the column back in its original position
+        const originalIndex = columnOrder.indexOf(column);
+        const newColumns = [...prev];
+        
+        // Find the correct insertion point
+        let insertIndex = 0;
+        while (insertIndex < newColumns.length && 
+               columnOrder.indexOf(newColumns[insertIndex]) < originalIndex) {
+          insertIndex++;
+        }
+        
+        // Insert the column at the correct position
+        newColumns.splice(insertIndex, 0, column);
+        return newColumns;
+      }
+    });
+  };
+
+  const toggleAllColumns = () => {
+    setVisibleColumns(prev => 
+      prev.length === columns.length ? [] : [...columns]
+    );
+  };
 
   // Optimized filtering
   const filteredFiles = useMemo(() => {
     if (!processedFiles.length) return [];
     
-    // Create search index for faster lookups
+    let result = [...processedFiles];
+    
+    // Apply filters
     const searchTerm = filters.search.toLowerCase();
-    if (!searchTerm && !filters.status.length && !filters.fileType.length && 
-        !filters.direction.length && !filters.clientName && 
-        !filters.dateRange.start && !filters.dateRange.end) {
-      return processedFiles;
+    if (searchTerm || filters.status.length || filters.fileType.length || 
+        filters.direction.length || filters.clientName || 
+        filters.dateRange.start || filters.dateRange.end) {
+      result = result.filter(file => {
+        // Date range filter
+        if (filters.dateRange.start || filters.dateRange.end) {
+          const fileDate = file.processingEndDate;
+          if (!fileDate) return false;
+
+          if (filters.dateRange.start && fileDate < new Date(filters.dateRange.start)) return false;
+          if (filters.dateRange.end && fileDate > new Date(filters.dateRange.end)) return false;
+        }
+
+        // Quick exit for other filters
+        if (filters.status.length && !filters.status.includes(file.status)) return false;
+        if (filters.fileType.length && !filters.fileType.includes(file.fileType)) return false;
+        if (filters.direction.length && !filters.direction.includes(file.direction)) return false;
+
+        if (filters.clientName && (!file.clientName || !file.clientName.toLowerCase().includes(filters.clientName.toLowerCase()))) {
+          return false;
+        }
+
+        // Optimize search
+        if (searchTerm) {
+          // Only search through specific columns for better performance
+          const searchableColumns = ['fileName', 'fileId', 'fileType', 'clientName'];
+          return searchableColumns.some(column => {
+            const value = file[column];
+            return value && value.toString().toLowerCase().includes(searchTerm);
+          });
+        }
+
+        return true;
+      });
     }
 
-    return processedFiles.filter(file => {
-      // Date range filter
-      if (filters.dateRange.start || filters.dateRange.end) {
-        const fileDate = file.processingEndDate;
-        if (!fileDate) return false;
+    // Apply sorting
+    result.sort((a, b) => {
+      let aValue = a[sortConfig.field];
+      let bValue = b[sortConfig.field];
 
-        if (filters.dateRange.start && fileDate < new Date(filters.dateRange.start)) return false;
-        if (filters.dateRange.end && fileDate > new Date(filters.dateRange.end)) return false;
+      // Handle special cases
+      if (sortConfig.field === 'creationTime') {
+        aValue = a.processingEndDate ? new Date(a.processingEndDate).getTime() : 0;
+        bValue = b.processingEndDate ? new Date(b.processingEndDate).getTime() : 0;
       }
 
-      // Quick exit for other filters
-      if (filters.status.length && !filters.status.includes(file.status)) return false;
-      if (filters.fileType.length && !filters.fileType.includes(file.fileType)) return false;
-      if (filters.direction.length && !filters.direction.includes(file.direction)) return false;
+      if (aValue === bValue) return 0;
+      if (aValue === null || aValue === undefined) return 1;
+      if (bValue === null || bValue === undefined) return -1;
 
-      if (filters.clientName && (!file.clientName || !file.clientName.toLowerCase().includes(filters.clientName.toLowerCase()))) {
-        return false;
-      }
-
-      // Optimize search
-      if (searchTerm) {
-        // Only search through specific columns for better performance
-        const searchableColumns = ['fileName', 'fileId', 'fileType', 'clientName'];
-        return searchableColumns.some(column => {
-          const value = file[column];
-          return value && value.toString().toLowerCase().includes(searchTerm);
-        });
-      }
-
-      return true;
+      const comparison = aValue < bValue ? -1 : 1;
+      return sortConfig.direction === 'asc' ? comparison : -comparison;
     });
-  }, [processedFiles, filters]);
+
+    return result;
+  }, [processedFiles, filters, sortConfig]);
 
   const downloadExcel = useCallback(async () => {
     try {
@@ -419,13 +563,185 @@ function DatastoreDetail() {
               onChange={handleSearchChange}
             />
           </div>
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="filter-button"
-          >
-            <i className="fas fa-filter"></i>
-            Show Filters
-          </button>
+          <div ref={filterRef}>
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="filter-button"
+            >
+              <i className="fas fa-filter"></i>
+              Show Filters
+            </button>
+            {showFilters && (
+              <div className="filters-container">
+                <div className="filter-section">
+                  <h3 className="filter-title">Date Range</h3>
+                  <div className="date-presets">
+                    {DATE_PRESETS.map(preset => (
+                      <button
+                        key={preset.value}
+                        onClick={() => handleDatePresetChange(preset.value)}
+                        className={`date-preset ${filters.dateRange.preset === preset.value ? 'selected' : ''}`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {(filters.dateRange.preset === 'custom' || !filters.dateRange.preset) && (
+                    <div className="custom-date-range">
+                      <div className="date-input-container">
+                        <i className="fas fa-calendar"></i>
+                        <input
+                          type="date"
+                          value={filters.dateRange.start}
+                          onChange={(e) => {
+                            handleFilterChange('dateRange', {
+                              ...filters.dateRange,
+                              start: e.target.value,
+                              preset: 'custom'
+                            });
+                          }}
+                        />
+                      </div>
+                      <div className="date-input-container">
+                        <i className="fas fa-calendar"></i>
+                        <input
+                          type="date"
+                          value={filters.dateRange.end}
+                          onChange={(e) => {
+                            handleFilterChange('dateRange', {
+                              ...filters.dateRange,
+                              end: e.target.value,
+                              preset: 'custom'
+                            });
+                          }}
+                          min={filters.dateRange.start}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="filter-grid">
+                  <FilterSection
+                    title="Status"
+                    options={filterOptions.status}
+                    selectedValues={filters.status}
+                    onChange={(values) => handleFilterChange('status', values)}
+                  />
+                  
+                  <FilterSection
+                    title="File Type"
+                    options={filterOptions.fileType}
+                    selectedValues={filters.fileType}
+                    onChange={(values) => handleFilterChange('fileType', values)}
+                  />
+                  
+                  <FilterSection
+                    title="Direction"
+                    options={filterOptions.direction}
+                    selectedValues={filters.direction}
+                    onChange={(values) => handleFilterChange('direction', values)}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="sort-container" ref={sortMenuRef}>
+            <button
+              className="sort-button"
+              onClick={() => setShowSortMenu(!showSortMenu)}
+            >
+              <i className="fas fa-sort"></i>
+              Sort
+            </button>
+            
+            {showSortMenu && (
+              <div className="sort-menu">
+                <div className="sort-menu-header">Sort by</div>
+                <div
+                  className={`sort-option ${sortConfig.field === 'datastoreId' ? 'active' : ''}`}
+                  onClick={() => handleSort('datastoreId')}
+                >
+                  <i className="fas fa-database"></i>
+                  Datastore ID
+                  {sortConfig.field === 'datastoreId' && (
+                    <span className="sort-direction">
+                      <i className={`fas fa-arrow-${sortConfig.direction === 'asc' ? 'up' : 'down'}`}></i>
+                    </span>
+                  )}
+                </div>
+                <div
+                  className={`sort-option ${sortConfig.field === 'creationTime' ? 'active' : ''}`}
+                  onClick={() => handleSort('creationTime')}
+                >
+                  <i className="fas fa-clock"></i>
+                  Creation Time
+                  {sortConfig.field === 'creationTime' && (
+                    <span className="sort-direction">
+                      <i className={`fas fa-arrow-${sortConfig.direction === 'asc' ? 'up' : 'down'}`}></i>
+                    </span>
+                  )}
+                </div>
+                <div
+                  className={`sort-option ${sortConfig.field === 'status' ? 'active' : ''}`}
+                  onClick={() => handleSort('status')}
+                >
+                  <i className="fas fa-info-circle"></i>
+                  Status
+                  {sortConfig.field === 'status' && (
+                    <span className="sort-direction">
+                      <i className={`fas fa-arrow-${sortConfig.direction === 'asc' ? 'up' : 'down'}`}></i>
+                    </span>
+                  )}
+                </div>
+                <div className="sort-divider"></div>
+                <div
+                  className="sort-option clear-sort"
+                  onClick={() => handleSort('clear')}
+                >
+                  <i className="fas fa-times"></i>
+                  Clear Sort
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="column-selector-container" ref={columnSelectorRef}>
+            <button
+              className="column-selector-button"
+              onClick={() => setShowColumnSelector(!showColumnSelector)}
+            >
+              <i className="fas fa-columns"></i>
+              Columns
+            </button>
+            
+            {showColumnSelector && (
+              <div className="column-selector-menu">
+                <div className="column-selector-header">
+                  <span>Show/Hide Columns</span>
+                  <button 
+                    className="select-all-button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleAllColumns();
+                    }}
+                  >
+                    {visibleColumns.length === columns.length ? 'Hide All' : 'Show All'}
+                  </button>
+                </div>
+                {columns.map(column => (
+                  <div
+                    key={column}
+                    className="column-option"
+                    onClick={() => toggleColumn(column)}
+                  >
+                    <div className={`column-checkbox ${visibleColumns.includes(column) ? 'checked' : ''}`} />
+                    <span className="column-label">{formatColumnHeader(column)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           {Object.values(filters).some(value => 
             Array.isArray(value) ? value.length > 0 : value
           ) && (
@@ -443,87 +759,11 @@ function DatastoreDetail() {
         </div>
       </div>
 
-      {showFilters && (
-        <div className="filters-container">
-          <div className="filter-section">
-            <h3 className="filter-title">Date Range</h3>
-            <div className="date-presets">
-              {DATE_PRESETS.map(preset => (
-                <button
-                  key={preset.value}
-                  onClick={() => handleDatePresetChange(preset.value)}
-                  className={`date-preset ${filters.dateRange.preset === preset.value ? 'selected' : ''}`}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
-
-            {(filters.dateRange.preset === 'custom' || !filters.dateRange.preset) && (
-              <div className="custom-date-range">
-                <div className="date-input-container">
-                  <i className="fas fa-calendar"></i>
-                  <input
-                    type="date"
-                    value={filters.dateRange.start}
-                    onChange={(e) => {
-                      handleFilterChange('dateRange', {
-                        ...filters.dateRange,
-                        start: e.target.value,
-                        preset: 'custom'
-                      });
-                    }}
-                  />
-                </div>
-                <div className="date-input-container">
-                  <i className="fas fa-calendar"></i>
-                  <input
-                    type="date"
-                    value={filters.dateRange.end}
-                    onChange={(e) => {
-                      handleFilterChange('dateRange', {
-                        ...filters.dateRange,
-                        end: e.target.value,
-                        preset: 'custom'
-                      });
-                    }}
-                    min={filters.dateRange.start}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="filter-grid">
-            <FilterSection
-              title="Status"
-              options={filterOptions.status}
-              selectedValues={filters.status}
-              onChange={(values) => handleFilterChange('status', values)}
-            />
-            
-            <FilterSection
-              title="File Type"
-              options={filterOptions.fileType}
-              selectedValues={filters.fileType}
-              onChange={(values) => handleFilterChange('fileType', values)}
-            />
-            
-            <FilterSection
-              title="Direction"
-              options={filterOptions.direction}
-              selectedValues={filters.direction}
-              onChange={(values) => handleFilterChange('direction', values)}
-            />
-          </div>
-        </div>
-      )}
-
       <div className="table-container" ref={tableRef}>
         <table>
           <thead>
             <tr>
-              {columns.map(column => (
+              {visibleColumns.map(column => (
                 <th key={column}>
                   {formatColumnHeader(column)}
                 </th>
@@ -533,7 +773,7 @@ function DatastoreDetail() {
           <tbody>
             {filteredFiles.slice(visibleRange.start, visibleRange.end).map((file, index) => (
               <tr key={index}>
-                {columns.map(column => (
+                {visibleColumns.map(column => (
                   <td key={column}>
                     {column === 'fileName' ? (
                       <div className="file-cell">
@@ -599,4 +839,4 @@ function DatastoreDetail() {
   );
 }
 
-export default DatastoreDetail;
+export default React.memo(DatastoreDetail);

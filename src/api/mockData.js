@@ -1,74 +1,5 @@
 // Mock data for the API based on the XML structure
-export const datastoreIds = [
-  {
-    id: "com.seeburger.sil.hsbc.HSBCUserAction",
-    creationTime: "1589764855207",
-    expirationTime: "-1",
-    synchronous: true,
-    className: "com.seeburger.sil.element.impl.SilElementDnaImpl",
-    datastoreId: "SilElementDna",
-    priority: "-1",
-    publishActionType: "OVERWRITE",
-    classType: "ELEMENTDNA"
-  },
-  {
-    id: "com.seeburger.sil.hsbc.HSBCTestActivity",
-    creationTime: "1637759242152",
-    expirationTime: "-1",
-    synchronous: true,
-    className: "com.seeburger.sil.element.impl.SilElementDnaImpl",
-    datastoreId: "SilElementDna",
-    priority: "-1",
-    publishActionType: "OVERWRITE",
-    classType: "ELEMENTDNA"
-  },
-  {
-    id: "com.seeburger.sil.hsbc.PaymentProcessing",
-    creationTime: "1673459872000",
-    expirationTime: "-1",
-    synchronous: true,
-    className: "com.seeburger.sil.element.impl.SilElementDnaImpl",
-    datastoreId: "PaymentProcessing",
-    priority: "1",
-    publishActionType: "APPEND",
-    classType: "ELEMENTDNA"
-  },
-  {
-    id: "com.seeburger.sil.hsbc.TransactionMonitor",
-    creationTime: "1668234567000",
-    expirationTime: "-1",
-    synchronous: false,
-    className: "com.seeburger.sil.element.impl.SilElementDnaImpl",
-    datastoreId: "TransactionMonitor",
-    priority: "2",
-    publishActionType: "UPDATE",
-    classType: "ELEMENTDNA"
-  },
-  {
-    id: "com.seeburger.sil.hsbc.AuditLogger",
-    creationTime: "1678901234000",
-    expirationTime: "1710437234000",
-    synchronous: true,
-    className: "com.seeburger.sil.element.impl.SilElementDnaImpl",
-    datastoreId: "AuditLogger",
-    priority: "0",
-    publishActionType: "OVERWRITE",
-    classType: "ELEMENTDNA"
-  },
-  {
-    id: "com.seeburger.sil.hsbc.ReportGenerator",
-    creationTime: "1682345678000",
-    expirationTime: "-1",
-    synchronous: true,
-    className: "com.seeburger.sil.element.impl.SilElementDnaImpl",
-    datastoreId: "ReportGenerator",
-    priority: "-1",
-    publishActionType: "APPEND",
-    classType: "ELEMENTDNA"
-  }
-];
-
-export const datastoreFiles = {
+const mockData = {
   'com.seeburger.sil.hsbc.HSBCUserAction': {
     datastoreId: 'com.seeburger.sil.hsbc.HSBCUserAction',
     files: [
@@ -260,3 +191,5 @@ export const datastoreFiles = {
     ]
   }
 };
+
+export { mockData };

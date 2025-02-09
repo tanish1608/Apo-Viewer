@@ -1,78 +1,107 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { verifyCredentials } from '../api/api';
 
 const AuthContext = createContext(null);
 
 // Constants
-const STORAGE_KEY = 'auth_data';
-const SESSION_CHECK_INTERVAL = 60000; // 1 minute
-
-// Demo credentials
-const DEMO_CREDENTIALS = {
-  username: 'admin',
-  password: 'admin123'
-};
+const SESSION_TOKEN_KEY = 'session_token';
+const SESSION_EXPIRY_KEY = 'session_expiry';
+const SESSION_DURATION = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
+const TOKEN_REFRESH_INTERVAL = 15 * 60 * 1000; // 15 minutes
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  // Validate stored auth data
+  // Function to generate a session token
+  const generateSessionToken = () => {
+    return btoa(crypto.getRandomValues(new Uint8Array(32)).toString());
+  };
+
+  // Function to check if the session is valid
+  const isSessionValid = () => {
+    const expiry = sessionStorage.getItem(SESSION_EXPIRY_KEY);
+    return expiry && new Date().getTime() < parseInt(expiry);
+  };
+
+  // Function to clear session
+  const clearSession = () => {
+    sessionStorage.removeItem(SESSION_TOKEN_KEY);
+    sessionStorage.removeItem(SESSION_EXPIRY_KEY);
+    setUser(null);
+  };
+
+  // Initialize auth state
   useEffect(() => {
-    const validateStoredAuth = async () => {
-      try {
-        const storedAuth = localStorage.getItem(STORAGE_KEY);
-        if (!storedAuth) return null;
+    const initializeAuth = () => {
+      const sessionToken = sessionStorage.getItem(SESSION_TOKEN_KEY);
+      
+      if (sessionToken && isSessionValid()) {
+        setUser({ sessionToken });
+      } else {
+        clearSession();
+      }
+      
+      setLoading(false);
+    };
 
-        const authData = JSON.parse(storedAuth);
-        
-        // For demo credentials, always return valid
-        if (authData.username === DEMO_CREDENTIALS.username && 
-            authData.password === DEMO_CREDENTIALS.password) {
-          return authData;
-        }
+    initializeAuth();
+  }, []);
 
-        // For real credentials, you would validate with the server here
-        return null;
-      } catch (error) {
-        console.error('Error validating stored auth:', error);
-        localStorage.removeItem(STORAGE_KEY);
-        return null;
+  // Set up session refresh
+  useEffect(() => {
+    if (!user) return;
+
+    const refreshSession = () => {
+      if (isSessionValid()) {
+        // Update session expiry
+        const newExpiry = new Date().getTime() + SESSION_DURATION;
+        sessionStorage.setItem(SESSION_EXPIRY_KEY, newExpiry.toString());
+      } else {
+        clearSession();
+        navigate('/login');
       }
     };
 
-    validateStoredAuth().then(validUser => {
-      setUser(validUser);
-      setLoading(false);
-    });
-  }, []);
+    const intervalId = setInterval(refreshSession, TOKEN_REFRESH_INTERVAL);
+    return () => clearInterval(intervalId);
+  }, [user, navigate]);
 
   const login = async (username, password) => {
     if (!username || !password) {
       throw new Error('Username and password are required');
     }
 
-    // Check for demo credentials
-    if (username === DEMO_CREDENTIALS.username && 
-        password === DEMO_CREDENTIALS.password) {
-      const userData = {
-        username,
-        password,
-        lastLogin: new Date().toISOString()
-      };
+    try {
+      // Verify credentials with the server
+      const { success, error } = await verifyCredentials(username, password);
+      
+      if (!success) {
+        throw new Error(error || 'Invalid credentials');
+      }
 
-      setUser(userData);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
+      // Generate session token and set expiry
+      const sessionToken = generateSessionToken();
+      const expiry = new Date().getTime() + SESSION_DURATION;
+      
+      // Store in session storage (not localStorage for security)
+      sessionStorage.setItem(SESSION_TOKEN_KEY, sessionToken);
+      sessionStorage.setItem(SESSION_EXPIRY_KEY, expiry.toString());
+      
+      // Update state
+      setUser({ sessionToken });
+      
       return true;
+    } catch (error) {
+      console.error('Login failed:', error);
+      throw error;
     }
-
-    throw new Error('Invalid credentials');
   };
 
   const logout = () => {
-    setUser(null);
-    localStorage.removeItem(STORAGE_KEY);
+    clearSession();
     navigate('/login');
   };
 

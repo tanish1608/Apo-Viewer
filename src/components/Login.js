@@ -13,7 +13,7 @@ function Login() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuth();
+  const { user, login } = useAuth();
 
   const [loginAttempts, setLoginAttempts] = useState(() => {
     const stored = sessionStorage.getItem('loginAttempts');
@@ -21,6 +21,13 @@ function Login() {
   });
 
   const from = location.state?.from?.pathname || '/';
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user) {
+      navigate('/', { replace: true });
+    }
+  }, [user, navigate]);
 
   useEffect(() => {
     if (loginAttempts.timestamp) {
