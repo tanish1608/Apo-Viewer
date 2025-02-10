@@ -1,7 +1,9 @@
 import { mockData } from './mockData';
 
-// API Base URL (proxy server)
-const BASE_URL = 'http://localhost:5000';
+// Get API URL from localStorage or fallback to environment variable
+const getApiUrl = () => {
+  return localStorage.getItem('api_url') || process.env.REACT_APP_API_URL || 'http://localhost:5000';
+};
 
 // Make API request through proxy
 const makeRequest = async (url, options) => {
@@ -38,7 +40,7 @@ const fetchSingleDatastore = async (datastoreId, username, password, where, sort
     }
 
     const response = await makeRequest(
-      `${BASE_URL}/datastores/${encodeURIComponent(datastoreId)}/files?${params.toString()}`
+      `${getApiUrl()}/datastores/${encodeURIComponent(datastoreId)}/files?${params.toString()}`
     );
 
     // Add datastoreId to each element in the array
@@ -158,7 +160,7 @@ export const verifyCredentials = async (username, password) => {
 
   try {
     const data = await makeRequest(
-      `${BASE_URL}/datastores?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+      `${getApiUrl()}/datastores?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
     );
     return { success: true, data };
   } catch (error) {

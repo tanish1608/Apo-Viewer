@@ -409,3 +409,143 @@ tbody tr:hover td {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* 
+
+/* Add these styles to fix filter container alignment */
+
+/* Filter container positioning */
+.filters-container {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: white;
+  border: 1px solid var(--light-grey);
+  border-radius: 2px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  width: 320px;
+  padding: 16px;
+}
+
+/* Filter sections */
+.filter-section {
+  margin-bottom: 16px;
+}
+
+.filter-section:last-child {
+  margin-bottom: 0;
+}
+
+.filter-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--dark-grey);
+  margin: 0 0 8px 0;
+}
+
+/* Date range section */
+.date-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.date-preset {
+  padding: 4px 8px;
+  font-size: 12px;
+  border: 1px solid var(--light-grey);
+  border-radius: 2px;
+  background: var(--light-colour);
+  color: var(--dark-grey);
+  cursor: pointer;
+}
+
+.date-preset:hover {
+  background: var(--hover-colour);
+}
+
+.date-preset.selected {
+  background: var(--hsbc-red);
+  color: white;
+  border-color: var(--hsbc-red);
+}
+
+/* Custom date range inputs */
+.custom-date-range {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.date-input-container {
+  position: relative;
+  flex: 1;
+}
+
+.date-input-container input {
+  width: 100%;
+  height: 28px;
+  padding: 0 8px 0 28px;
+  font-size: 13px;
+  border: 1px solid var(--light-grey);
+  border-radius: 2px;
+}
+
+.date-input-container i {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--dark-grey);
+}
+
+/* Filter grid for status, file type, and direction */
+.filter-grid {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+/* Filter options */
+.filter-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.filter-option {
+  padding: 4px 8px;
+  font-size: 12px;
+  border: 1px solid var(--light-grey);
+  border-radius: 2px;
+  background: var(--light-colour);
+  color: var(--dark-grey);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.filter-option:hover {
+  background: var(--hover-colour);
+}
+
+.filter-option.selected {
+  background: var(--hsbc-red);
+  color: white;
+  border-color: var(--hsbc-red);
+} */

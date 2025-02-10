@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../styles/DatastoreList.css';
 
@@ -6,8 +6,17 @@ function DatastoreList() {
   const [searchFields, setSearchFields] = useState([
     { datastoreId: '', whereClause: '', sortBy: '' }
   ]);
+  const [apiUrl, setApiUrl] = useState(() => {
+    return localStorage.getItem('api_url') || '';
+  });
   const [error, setError] = useState('');
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (apiUrl) {
+      localStorage.setItem('api_url', apiUrl);
+    }
+  }, [apiUrl]);
 
   const handleAddDatastore = () => {
     setSearchFields([
@@ -31,6 +40,11 @@ function DatastoreList() {
   const handleSubmit = (e) => {
     e.preventDefault();
     
+    if (!apiUrl.trim()) {
+      setError('API URL is required');
+      return;
+    }
+
     const validFields = searchFields.filter(field => field.datastoreId.trim());
     if (validFields.length === 0) {
       setError('At least one Datastore ID is required');
@@ -63,6 +77,22 @@ function DatastoreList() {
               {error}
             </div>
           )}
+          
+          <div className="api-url-box">
+            <div className="form-group">
+              <label htmlFor="apiUrl" className="form-label">
+                API URL <span className="required">*</span>
+              </label>
+              <input
+                id="apiUrl"
+                type="text"
+                value={apiUrl}
+                onChange={(e) => setApiUrl(e.target.value)}
+                className="form-input"
+                placeholder="Enter API URL (e.g., https://api.example.com)"
+              />
+            </div>
+          </div>
           
           {searchFields.map((field, index) => (
             <div key={index} className="datastore-box">
