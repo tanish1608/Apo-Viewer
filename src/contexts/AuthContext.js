@@ -65,7 +65,7 @@ export const AuthProvider = ({ children }) => {
 
     const intervalId = setInterval(refreshUserToken, TOKEN_REFRESH_INTERVAL);
     return () => clearInterval(intervalId);
-  }, [user, handleLogout]);
+  }, [user]);
 
   const login = async (username, password) => {
     try {
