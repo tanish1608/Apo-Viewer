@@ -14,7 +14,6 @@ const COOKIE_SECRET = process.env.COOKIE_SECRET || crypto.randomBytes(64).toStri
 
 // In-memory storage for demo purposes
 // In production, use a proper database
-const users = new Map();
 const refreshTokens = new Map();
 
 // Create a reusable HTTPS agent for keep-alive connections
@@ -31,37 +30,39 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser(COOKIE_SECRET));
 
-// Helper function to hash passwords
-const hashPassword = async (password) => {
-  return new Promise((resolve, reject) => {
-    // Generate a random salt
-    crypto.randomBytes(16, (err, salt) => {
-      if (err) reject(err);
-
-      // Use PBKDF2 for password hashing
-      crypto.pbkdf2(password, salt, 100000, 64, 'sha512', (err, derivedKey) => {
-        if (err) reject(err);
-        resolve(salt.toString('hex') + ':' + derivedKey.toString('hex'));
-      });
+// Helper function to verify credentials with the API
+const verifyUserCredentials = async (username, password) => {
+  try {
+    const apiUrl = process.env.API_URL || 'https://api.example.com'; // Replace with your actual API URL
+    const response = await fetch(`${apiUrl}/auth`, {
+      method: 'GET',
+      headers: {
+        'Authorization': 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64'),
+        'Content-Type': 'application/json'
+      },
+      agent
     });
-  });
-};
 
-// Helper function to verify password
-const verifyPassword = async (password, hash) => {
-  return new Promise((resolve, reject) => {
-    const [salt, key] = hash.split(':');
-    crypto.pbkdf2(password, Buffer.from(salt, 'hex'), 100000, 64, 'sha512', (err, derivedKey) => {
-      if (err) reject(err);
-      resolve(key === derivedKey.toString('hex'));
-    });
-  });
+    if (!response.ok) {
+      return null;
+    }
+
+    const userData = await response.json();
+    return {
+      id: userData.id || username, // Use provided ID or fallback to username
+      username: username,
+      roles: userData.roles || []
+    };
+  } catch (error) {
+    console.error('API authentication error:', error);
+    return null;
+  }
 };
 
 // Generate JWT tokens
 const generateTokens = (user) => {
   const accessToken = jwt.sign(
-    { userId: user.id, username: user.username },
+    { userId: user.id, username: user.username, roles: user.roles },
     ACCESS_TOKEN_SECRET,
     { expiresIn: '15m' }
   );
@@ -73,22 +74,6 @@ const generateTokens = (user) => {
   );
 
   return { accessToken, refreshToken };
-};
-
-// User management functions
-const verifyUserCredentials = async (username, password) => {
-  const user = users.get(username);
-  if (!user) return null;
-  
-  const isValid = await verifyPassword(password, user.password);
-  return isValid ? user : null;
-};
-
-const getUserById = (userId) => {
-  for (const [_, user] of users.entries()) {
-    if (user.id === userId) return user;
-  }
-  return null;
 };
 
 // Token management functions
@@ -123,7 +108,7 @@ app.post('/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    // In production, verify against your database
+    // Verify credentials with API
     const user = await verifyUserCredentials(username, password);
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -132,7 +117,7 @@ app.post('/auth/login', async (req, res) => {
     // Generate tokens
     const { accessToken, refreshToken } = generateTokens(user);
 
-    // Store refresh token in database
+    // Store refresh token
     await storeRefreshToken(user.id, refreshToken);
 
     // Set refresh token in HTTP-only cookie
@@ -144,7 +129,8 @@ app.post('/auth/login', async (req, res) => {
       accessToken,
       user: {
         id: user.id,
-        username: user.username
+        username: user.username,
+        roles: user.roles
       }
     });
   } catch (error) {
@@ -164,8 +150,9 @@ app.post('/auth/refresh', async (req, res) => {
 
     // Verify refresh token
     const decoded = jwt.verify(refreshToken, REFRESH_TOKEN_SECRET);
-    const user = await getUserById(decoded.userId);
-
+    
+    // Verify user still exists and has access
+    const user = await verifyUserCredentials(decoded.username, decoded.password);
     if (!user) {
       return res.status(401).json({ error: 'Invalid refresh token' });
     }
@@ -173,7 +160,7 @@ app.post('/auth/refresh', async (req, res) => {
     // Generate new tokens
     const tokens = generateTokens(user);
 
-    // Update refresh token in database
+    // Update refresh token
     await updateRefreshToken(user.id, tokens.refreshToken);
 
     // Set new refresh token cookie
@@ -196,7 +183,6 @@ app.post('/auth/logout', async (req, res) => {
     const { refreshToken } = req.signedCookies;
     
     if (refreshToken) {
-      // Delete refresh token from database
       const decoded = jwt.verify(refreshToken, REFRESH_TOKEN_SECRET);
       await deleteRefreshToken(decoded.userId);
     }
