@@ -23,6 +23,8 @@ const makeRequest = async (url, options = {}) => {
     const response = await fetch(url, { ...defaultOptions, ...options });
 
     if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+      
       if (response.status === 401) {
         // Try to refresh token on 401
         try {
@@ -39,7 +41,8 @@ const makeRequest = async (url, options = {}) => {
             });
             
             if (!retryResponse.ok) {
-              throw new Error(`HTTP error! status: ${retryResponse.status}`);
+              const retryErrorData = await retryResponse.json().catch(() => ({ error: 'Request failed after token refresh' }));
+              throw new Error(retryErrorData.error || `HTTP error! status: ${retryResponse.status}`);
             }
             
             return retryResponse.json();
@@ -51,7 +54,7 @@ const makeRequest = async (url, options = {}) => {
           throw new Error('Session expired. Please log in again.');
         }
       }
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
     }
 
     return response.json();
@@ -66,85 +69,7 @@ const isUsingDemoCredentials = (username) => {
   return username === 'admin';
 };
 
-// Verify credentials and get tokens
-export const verifyCredentials = async (username, password) => {
-  console.log('Verifying credentials for username:', username);
-
-  // Check for demo credentials
-  if (isUsingDemoCredentials(username)) {
-    console.log('Using demo credentials - bypassing API call');
-    return { 
-      success: true, 
-      data: { 
-        user: { id: 'demo', username: 'admin' },
-        mockData 
-      } 
-    };
-  }
-
-  try {
-    const response = await makeRequest(
-      `${getApiUrl()}/auth/login`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ username, password })
-      }
-    );
-
-    if (response.accessToken) {
-      sessionStorage.setItem('accessToken', response.accessToken);
-    }
-
-    return { success: true, data: response };
-  } catch (error) {
-    console.error('Credentials verification failed:', error);
-    if (error.message.includes('401')) {
-      return { success: false, error: 'Invalid credentials' };
-    }
-    return { success: false, error: error.message };
-  }
-};
-
-// Refresh access token
-export const refreshToken = async () => {
-  try {
-    const response = await makeRequest(
-      `${getApiUrl()}/auth/refresh`,
-      { 
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${sessionStorage.getItem('accessToken')}`
-        }
-      }
-    );
-
-    if (response.accessToken) {
-      sessionStorage.setItem('accessToken', response.accessToken);
-    }
-
-    return { success: true, data: response };
-  } catch (error) {
-    console.error('Token refresh failed:', error);
-    return { success: false, error: error.message };
-  }
-};
-
-// Logout and clear session
-export const logout = async () => {
-  try {
-    await makeRequest(
-      `${getApiUrl()}/auth/logout`,
-      { method: 'POST' }
-    );
-    sessionStorage.removeItem('accessToken');
-    return { success: true };
-  } catch (error) {
-    console.error('Logout failed:', error);
-    return { success: false, error: error.message };
-  }
-};
-
-// Fetch datastore files
+// Export the fetchDatastoreFiles function
 export const fetchDatastoreFiles = async (datastoreIds, queryString = '') => {
   try {
     // For demo credentials, return mock data
@@ -185,5 +110,99 @@ export const fetchDatastoreFiles = async (datastoreIds, queryString = '') => {
   } catch (error) {
     console.error('Failed to fetch datastore files:', error);
     throw error;
+  }
+};
+
+// Verify credentials and get tokens
+export const verifyCredentials = async (username, password) => {
+  try {
+    // Check for demo credentials
+    if (isUsingDemoCredentials(username)) {
+      console.log('Using demo credentials - bypassing API call');
+      const demoToken = 'demo-token';
+      sessionStorage.setItem('accessToken', demoToken);
+      return { 
+        success: true, 
+        data: { 
+          user: { id: 'demo', username: 'admin' },
+          accessToken: demoToken,
+          mockData 
+        } 
+      };
+    }
+
+    const response = await makeRequest(
+      `${getApiUrl()}/auth/login`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ username, password })
+      }
+    );
+
+    if (response.accessToken) {
+      sessionStorage.setItem('accessToken', response.accessToken);
+    }
+
+    return { success: true, data: response };
+  } catch (error) {
+    console.error('Credentials verification failed:', error);
+    if (error.message.includes('401')) {
+      return { success: false, error: 'Invalid credentials' };
+    }
+    return { success: false, error: error.message };
+  }
+};
+
+// Refresh access token
+export const refreshToken = async () => {
+  try {
+    // For demo credentials, return mock success
+    if (isUsingDemoCredentials('admin')) {
+      const demoToken = 'demo-token';
+      sessionStorage.setItem('accessToken', demoToken);
+      return { 
+        success: true, 
+        data: { 
+          accessToken: demoToken 
+        } 
+      };
+    }
+
+    const response = await makeRequest(
+      `${getApiUrl()}/auth/refresh`,
+      { method: 'POST' }
+    );
+
+    if (response.accessToken) {
+      sessionStorage.setItem('accessToken', response.accessToken);
+    }
+
+    return { success: true, data: response };
+  } catch (error) {
+    console.error('Token refresh failed:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Logout and clear session
+export const logout = async () => {
+  try {
+    // For demo credentials, just clear session
+    if (isUsingDemoCredentials('admin')) {
+      sessionStorage.removeItem('accessToken');
+      return { success: true };
+    }
+
+    await makeRequest(
+      `${getApiUrl()}/auth/logout`,
+      { method: 'POST' }
+    );
+    sessionStorage.removeItem('accessToken');
+    return { success: true };
+  } catch (error) {
+    console.error('Logout failed:', error);
+    // Still clear session even if API call fails
+    sessionStorage.removeItem('accessToken');
+    return { success: false, error: error.message };
   }
 };

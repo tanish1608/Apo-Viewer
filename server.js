@@ -4,12 +4,18 @@ const fetch = require('node-fetch');
 const https = require('https');
 const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
+const jwt = require('jsonwebtoken');
 const app = express();
 
 // Constants
 const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || crypto.randomBytes(64).toString('hex');
 const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET || crypto.randomBytes(64).toString('hex');
 const COOKIE_SECRET = process.env.COOKIE_SECRET || crypto.randomBytes(64).toString('hex');
+
+// In-memory storage for demo purposes
+// In production, use a proper database
+const users = new Map();
+const refreshTokens = new Map();
 
 // Create a reusable HTTPS agent for keep-alive connections
 const agent = new https.Agent({
@@ -67,6 +73,35 @@ const generateTokens = (user) => {
   );
 
   return { accessToken, refreshToken };
+};
+
+// User management functions
+const verifyUserCredentials = async (username, password) => {
+  const user = users.get(username);
+  if (!user) return null;
+  
+  const isValid = await verifyPassword(password, user.password);
+  return isValid ? user : null;
+};
+
+const getUserById = (userId) => {
+  for (const [_, user] of users.entries()) {
+    if (user.id === userId) return user;
+  }
+  return null;
+};
+
+// Token management functions
+const storeRefreshToken = async (userId, token) => {
+  refreshTokens.set(userId, token);
+};
+
+const updateRefreshToken = async (userId, token) => {
+  refreshTokens.set(userId, token);
+};
+
+const deleteRefreshToken = async (userId) => {
+  refreshTokens.delete(userId);
 };
 
 // Set secure cookie options
@@ -196,6 +231,21 @@ const authenticateToken = (req, res, next) => {
 
 // Protected routes
 app.use('/api', authenticateToken);
+
+// Helper function to process chunked responses
+const processChunkedResponse = async (response, res) => {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const chunk = decoder.decode(value, { stream: true });
+    res.write(chunk);
+  }
+
+  res.end();
+};
 
 // Update the datastores endpoint to use authentication
 app.get('/api/datastores', async (req, res) => {
