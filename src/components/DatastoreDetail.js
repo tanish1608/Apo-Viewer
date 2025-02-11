@@ -2,9 +2,13 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom';
 import { fetchDatastoreFiles } from '../api/api';
 import * as XLSX from 'xlsx';
+import DatePicker from 'react-datepicker';
+import Select from 'react-select';
+import "react-datepicker/dist/react-datepicker.css";
 import '../styles/Sort.css';
 import '../styles/ColumnSelector.css';
 import { mockData } from '../api/mockData';
+import ErrorToast from './ErrorToast';
 
 // Constants
 const ITEMS_PER_PAGE = 50;
@@ -41,6 +45,7 @@ function DatastoreDetail() {
   const [visibleColumns, setVisibleColumns] = useState([]);
   const [columnOrder, setColumnOrder] = useState([]); // Add this new state
   const [error, setError] = useState(null);
+  const [errors, setErrors] = useState([]);
   const [searchInput, setSearchInput] = useState('');
   const [sortConfig, setSortConfig] = useState({
     field: '',
@@ -58,6 +63,15 @@ function DatastoreDetail() {
     clientName: '',
     search: ''
   });
+
+  const addError = (error) => {
+    const id = Date.now();
+    setErrors(prev => [...prev, { id, message: error }]);
+  };
+
+  const removeError = (id) => {
+    setErrors(prev => prev.filter(error => error.id !== id));
+  };
 
   // Combine all click outside handlers into one effect
   useEffect(() => {
@@ -327,10 +341,20 @@ function DatastoreDetail() {
     return result;
   }, [processedFiles, filters, sortConfig]);
 
+  const getDatastoreName = useCallback((id) => {
+    const parts = id.split('.');
+    return parts[parts.length - 1];
+  }, []);
+  
   const downloadExcel = useCallback(async () => {
     try {
       setExportLoading(true);
       
+      if (filteredFiles.length === 0) {
+        addError('No data available to export');
+        return;
+      }
+
       // Process in batches
       const workbook = XLSX.utils.book_new();
       let wsData = [];
@@ -339,7 +363,7 @@ function DatastoreDetail() {
         const batch = filteredFiles.slice(i, i + EXPORT_BATCH_SIZE);
         const batchData = batch.map(file => {
           const row = {};
-          columns.forEach(column => {
+          visibleColumns.forEach(column => {
             row[formatColumnHeader(column)] = file[column] || '-';
           });
           return row;
@@ -352,22 +376,18 @@ function DatastoreDetail() {
       XLSX.writeFile(workbook, `${getDatastoreName(id)}_export.xlsx`);
     } catch (error) {
       console.error('Export failed:', error);
-      setError('Export failed. Please try again.');
+      addError('Failed to export data. Please try again.');
     } finally {
       setExportLoading(false);
     }
-  }, [filteredFiles, columns, id]);
-
-  const getDatastoreName = useCallback((id) => {
-    const parts = id.split('.');
-    return parts[parts.length - 1];
-  }, []);
+  }, [filteredFiles, visibleColumns, id, getDatastoreName]);
 
   const downloadCSV = useCallback(() => {
+    // Only use visible columns for the header
     const csvContent = [
-      columns.join(','),
+      visibleColumns.map(column => formatColumnHeader(column)).join(','),
       ...files.map(file => 
-        columns.map(column => {
+        visibleColumns.map(column => {
           const value = file[column] || '';
           return typeof value === 'string' && value.includes(',') 
             ? `"${value}"` 
@@ -385,7 +405,7 @@ function DatastoreDetail() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-  }, [files, columns, id, getDatastoreName]);
+  }, [files, visibleColumns, id, getDatastoreName]);
 
   const handleDatePresetChange = (preset) => {
     const today = new Date();
@@ -491,27 +511,34 @@ function DatastoreDetail() {
     setSearchInput(e.target.value);
   };
 
-  const FilterSection = ({ title, options, selectedValues, onChange }) => (
-    <div className="filter-section">
-      <h3 className="filter-title">{title}</h3>
-      <div className="filter-options">
-        {options.map(option => (
-          <button
-            key={option}
-            onClick={() => {
-              const newValues = selectedValues.includes(option)
-                ? selectedValues.filter(v => v !== option)
-                : [...selectedValues, option];
-              onChange(newValues);
-            }}
-            className={`filter-option ${selectedValues.includes(option) ? 'selected' : ''}`}
-          >
-            {option}
-          </button>
-        ))}
+  const FilterSection = ({ title, options, selectedValues, onChange }) => {
+    const selectOptions = options.map(option => ({
+      value: option,
+      label: option
+    }));
+
+    const value = selectedValues.map(val => ({
+      value: val,
+      label: val
+    }));
+
+    return (
+      <div className="filter-section">
+        <h3 className="filter-title">{title}</h3>
+        <Select
+          isMulti
+          options={selectOptions}
+          value={value}
+          onChange={(selected) => {
+            onChange(selected ? selected.map(option => option.value) : []);
+          }}
+          className="filter-select"
+          classNamePrefix="select"
+          placeholder={`Select ${title.toLowerCase()}...`}
+        />
       </div>
-    </div>
-  );
+    );
+  };
 
   if (loading) {
     return (
@@ -523,12 +550,15 @@ function DatastoreDetail() {
 
   return (
     <div className="container">
-      {error && (
-        <div className="error-message">
-          {error}
-          <button onClick={() => setError(null)}>Dismiss</button>
-        </div>
-      )}
+      <div className="error-container">
+        {errors.map(error => (
+          <ErrorToast
+            key={error.id}
+            error={error.message}
+            onDismiss={() => removeError(error.id)}
+          />
+        ))}
+      </div>
       
       <div className="header-section">
         <Link to="/" className="back-link">← Back to Datastores</Link>
@@ -575,51 +605,41 @@ function DatastoreDetail() {
               <div className="filters-container">
                 <div className="filter-section">
                   <h3 className="filter-title">Date Range</h3>
-                  <div className="date-presets">
-                    {DATE_PRESETS.map(preset => (
-                      <button
-                        key={preset.value}
-                        onClick={() => handleDatePresetChange(preset.value)}
-                        className={`date-preset ${filters.dateRange.preset === preset.value ? 'selected' : ''}`}
-                      >
-                        {preset.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {(filters.dateRange.preset === 'custom' || !filters.dateRange.preset) && (
-                    <div className="custom-date-range">
-                      <div className="date-input-container">
-                        <i className="fas fa-calendar"></i>
-                        <input
-                          type="date"
-                          value={filters.dateRange.start}
-                          onChange={(e) => {
-                            handleFilterChange('dateRange', {
-                              ...filters.dateRange,
-                              start: e.target.value,
-                              preset: 'custom'
-                            });
-                          }}
-                        />
-                      </div>
-                      <div className="date-input-container">
-                        <i className="fas fa-calendar"></i>
-                        <input
-                          type="date"
-                          value={filters.dateRange.end}
-                          onChange={(e) => {
-                            handleFilterChange('dateRange', {
-                              ...filters.dateRange,
-                              end: e.target.value,
-                              preset: 'custom'
-                            });
-                          }}
-                          min={filters.dateRange.start}
-                        />
-                      </div>
+                  <div className="date-picker-container">
+                    <div className="date-picker-wrapper">
+                      <i className="fas fa-calendar date-picker-icon"></i>
+                      <DatePicker
+                        selected={filters.dateRange.start ? new Date(filters.dateRange.start) : null}
+                        onChange={(date) => {
+                          handleFilterChange('dateRange', {
+                            ...filters.dateRange,
+                            start: date ? date.toISOString().split('T')[0] : '',
+                            preset: 'custom'
+                          });
+                        }}
+                        className="date-picker-input"
+                        placeholderText="Start date"
+                        dateFormat="yyyy-MM-dd"
+                      />
                     </div>
-                  )}
+                    <div className="date-picker-wrapper">
+                      <i className="fas fa-calendar date-picker-icon"></i>
+                      <DatePicker
+                        selected={filters.dateRange.end ? new Date(filters.dateRange.end) : null}
+                        onChange={(date) => {
+                          handleFilterChange('dateRange', {
+                            ...filters.dateRange,
+                            end: date ? date.toISOString().split('T')[0] : '',
+                            preset: 'custom'
+                          });
+                        }}
+                        className="date-picker-input"
+                        placeholderText="End date"
+                        dateFormat="yyyy-MM-dd"
+                        minDate={filters.dateRange.start ? new Date(filters.dateRange.start) : null}
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div className="filter-grid">

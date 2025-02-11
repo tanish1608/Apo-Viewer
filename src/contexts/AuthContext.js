@@ -1,108 +1,122 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { verifyCredentials } from '../api/api';
+import { verifyCredentials, refreshToken, logout as apiLogout } from '../api/api';
+import ErrorToast from '../components/ErrorToast';
 
 const AuthContext = createContext(null);
 
 // Constants
-const SESSION_TOKEN_KEY = 'session_token';
-const SESSION_EXPIRY_KEY = 'session_expiry';
-const SESSION_DURATION = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
-const TOKEN_REFRESH_INTERVAL = 15 * 60 * 1000; // 15 minutes
+const TOKEN_REFRESH_INTERVAL = 14 * 60 * 1000; // 14 minutes
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCKOUT_DURATION = 15 * 60 * 1000; // 15 minutes
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [errors, setErrors] = useState([]);
   const navigate = useNavigate();
 
-  // Function to generate a session token
-  const generateSessionToken = () => {
-    return btoa(crypto.getRandomValues(new Uint8Array(32)).toString());
+  // Function to add errors
+  const addError = (message) => {
+    const id = Date.now();
+    setErrors(prev => [...prev, { id, message }]);
   };
 
-  // Function to check if the session is valid
-  const isSessionValid = () => {
-    const expiry = sessionStorage.getItem(SESSION_EXPIRY_KEY);
-    return expiry && new Date().getTime() < parseInt(expiry);
-  };
-
-  // Function to clear session
-  const clearSession = () => {
-    sessionStorage.removeItem(SESSION_TOKEN_KEY);
-    sessionStorage.removeItem(SESSION_EXPIRY_KEY);
-    setUser(null);
+  // Function to remove errors
+  const removeError = (id) => {
+    setErrors(prev => prev.filter(error => error.id !== id));
   };
 
   // Initialize auth state
   useEffect(() => {
-    const initializeAuth = () => {
-      const sessionToken = sessionStorage.getItem(SESSION_TOKEN_KEY);
-      
-      if (sessionToken && isSessionValid()) {
-        setUser({ sessionToken });
-      } else {
-        clearSession();
+    const initAuth = async () => {
+      try {
+        // Attempt to refresh token on initial load
+        const response = await refreshToken();
+        if (response.success) {
+          setUser(response.data.user);
+        }
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+      } finally {
+        setLoading(false);
       }
-      
-      setLoading(false);
     };
 
-    initializeAuth();
+    initAuth();
   }, []);
 
-  // Set up session refresh
+  // Set up token refresh
   useEffect(() => {
     if (!user) return;
 
-    const refreshSession = () => {
-      if (isSessionValid()) {
-        // Update session expiry
-        const newExpiry = new Date().getTime() + SESSION_DURATION;
-        sessionStorage.setItem(SESSION_EXPIRY_KEY, newExpiry.toString());
-      } else {
-        clearSession();
-        navigate('/login');
+    const refreshUserToken = async () => {
+      try {
+        const response = await refreshToken();
+        if (!response.success) {
+          throw new Error('Failed to refresh token');
+        }
+      } catch (error) {
+        console.error('Token refresh failed:', error);
+        addError('Session expired. Please log in again.');
+        handleLogout();
       }
     };
 
-    const intervalId = setInterval(refreshSession, TOKEN_REFRESH_INTERVAL);
+    const intervalId = setInterval(refreshUserToken, TOKEN_REFRESH_INTERVAL);
     return () => clearInterval(intervalId);
-  }, [user, navigate]);
+  }, [user, handleLogout]);
 
   const login = async (username, password) => {
-    if (!username || !password) {
-      throw new Error('Username and password are required');
-    }
-
     try {
-      // Verify credentials with the server
-      const { success, error } = await verifyCredentials(username, password);
-      
-      if (!success) {
-        throw new Error(error || 'Invalid credentials');
+      if (!username || !password) {
+        throw new Error('Username and password are required');
       }
 
-      // Generate session token and set expiry
-      const sessionToken = generateSessionToken();
-      const expiry = new Date().getTime() + SESSION_DURATION;
+      // Check login attempts
+      const attempts = JSON.parse(sessionStorage.getItem('loginAttempts') || '{"count": 0}');
+      if (attempts.count >= MAX_LOGIN_ATTEMPTS) {
+        const lockoutEnd = attempts.timestamp + LOCKOUT_DURATION;
+        if (Date.now() < lockoutEnd) {
+          const minutesLeft = Math.ceil((lockoutEnd - Date.now()) / 60000);
+          throw new Error(`Too many login attempts. Please try again in ${minutesLeft} minutes.`);
+        } else {
+          sessionStorage.removeItem('loginAttempts');
+        }
+      }
+
+      const response = await verifyCredentials(username, password);
       
-      // Store in session storage (not localStorage for security)
-      sessionStorage.setItem(SESSION_TOKEN_KEY, sessionToken);
-      sessionStorage.setItem(SESSION_EXPIRY_KEY, expiry.toString());
-      
-      // Update state
-      setUser({ sessionToken });
-      
-      return true;
+      if (response.success) {
+        setUser(response.data.user);
+        sessionStorage.removeItem('loginAttempts');
+        return true;
+      } else {
+        // Increment login attempts
+        const newAttempts = {
+          count: (attempts.count || 0) + 1,
+          timestamp: Date.now()
+        };
+        sessionStorage.setItem('loginAttempts', JSON.stringify(newAttempts));
+        
+        throw new Error('Invalid credentials');
+      }
     } catch (error) {
       console.error('Login failed:', error);
+      addError(error.message);
       throw error;
     }
   };
 
-  const logout = () => {
-    clearSession();
-    navigate('/login');
+  const handleLogout = async () => {
+    try {
+      await apiLogout();
+    } catch (error) {
+      console.error('Logout failed:', error);
+    } finally {
+      setUser(null);
+      navigate('/login');
+    }
   };
 
   if (loading) {
@@ -110,7 +124,14 @@ export const AuthProvider = ({ children }) => {
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, login, logout: handleLogout }}>
+      {errors.map(error => (
+        <ErrorToast
+          key={error.id}
+          error={error.message}
+          onDismiss={() => removeError(error.id)}
+        />
+      ))}
       {children}
     </AuthContext.Provider>
   );

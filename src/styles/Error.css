@@ -1,0 +1,83 @@
+/* Error styles */
+.error-container {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 1100;
+  max-width: 400px;
+  width: 100%;
+}
+
+.error-message {
+  background: white;
+  border-left: 4px solid var(--hsbc-red);
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: 8px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  animation: slideIn 0.3s ease-out;
+}
+
+.error-content {
+  flex: 1;
+}
+
+.error-title {
+  color: var(--hsbc-red);
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+}
+
+.error-text {
+  color: var(--dark-grey);
+  font-size: 13px;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.error-dismiss {
+  background: none;
+  border: none;
+  color: var(--dark-grey);
+  cursor: pointer;
+  padding: 4px;
+  font-size: 14px;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.error-dismiss:hover {
+  opacity: 1;
+}
+
+/* Error animations */
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOut {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+.error-message.removing {
+  animation: slideOut 0.3s ease-in forwards;
+}
