@@ -2,21 +2,27 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../styles/DatastoreList.css';
 
+// Environment configurations
+const ENV_CONFIGS = {
+  env1: 'https://api-env1.example.com',
+  env2: 'https://api-env2.example.com',
+  env3: 'https://api-env3.example.com'
+};
+
 function DatastoreList() {
   const [searchFields, setSearchFields] = useState([
     { datastoreId: '', whereClause: '', sortBy: '' }
   ]);
-  const [apiUrl, setApiUrl] = useState(() => {
-    return localStorage.getItem('api_url') || '';
+  const [selectedEnv, setSelectedEnv] = useState(() => {
+    return localStorage.getItem('selected_env') || 'env1';
   });
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (apiUrl) {
-      localStorage.setItem('api_url', apiUrl);
-    }
-  }, [apiUrl]);
+    localStorage.setItem('selected_env', selectedEnv);
+    localStorage.setItem('api_url', ENV_CONFIGS[selectedEnv]);
+  }, [selectedEnv]);
 
   const handleAddDatastore = () => {
     setSearchFields([
@@ -40,12 +46,19 @@ function DatastoreList() {
   const handleSubmit = (e) => {
     e.preventDefault();
     
-    if (!apiUrl.trim()) {
-      setError('API URL is required');
-      return;
-    }
+    // Process each field's datastoreId to handle comma-separated values
+    const processedFields = searchFields.flatMap(field => {
+      // Split the datastoreId by commas and trim each value
+      const datastoreIds = field.datastoreId.split(',').map(id => id.trim()).filter(Boolean);
+      
+      // If there are multiple IDs, create a new field object for each
+      return datastoreIds.map(id => ({
+        ...field,
+        datastoreId: id
+      }));
+    });
 
-    const validFields = searchFields.filter(field => field.datastoreId.trim());
+    const validFields = processedFields.filter(field => field.datastoreId);
     if (validFields.length === 0) {
       setError('At least one Datastore ID is required');
       return;
@@ -80,17 +93,19 @@ function DatastoreList() {
           
           <div className="api-url-box">
             <div className="form-group">
-              <label htmlFor="apiUrl" className="form-label">
-                API URL <span className="required">*</span>
+              <label htmlFor="environment" className="form-label">
+                Environment <span className="required">*</span>
               </label>
-              <input
-                id="apiUrl"
-                type="text"
-                value={apiUrl}
-                onChange={(e) => setApiUrl(e.target.value)}
+              <select
+                id="environment"
+                value={selectedEnv}
+                onChange={(e) => setSelectedEnv(e.target.value)}
                 className="form-input"
-                placeholder="Enter API URL (e.g., https://api.example.com)"
-              />
+              >
+                <option value="env1">Environment 1</option>
+                <option value="env2">Environment 2</option>
+                <option value="env3">Environment 3</option>
+              </select>
             </div>
           </div>
           
@@ -120,8 +135,11 @@ function DatastoreList() {
                   value={field.datastoreId}
                   onChange={(e) => handleFieldChange(index, 'datastoreId', e.target.value)}
                   className="form-input"
-                  placeholder="Enter datastore ID (e.g., HSBCUserAction)"
+                  placeholder="Enter datastore IDs (e.g., HSBCUserAction, HSBCTestActivity)"
                 />
+                <p className="help-text">
+                  You can enter multiple datastore IDs separated by commas
+                </p>
               </div>
 
               <div className="form-group">
