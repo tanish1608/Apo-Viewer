@@ -1,4 +1,5 @@
 import { mockData } from './mockData';
+import CryptoJS from 'crypto-js';
 
 const getApiUrl = () => {
   return localStorage.getItem('api_url') || process.env.REACT_APP_API_URL || 'http://localhost:5000';
@@ -34,10 +35,16 @@ export const fetchDatastoreFiles = async (datastoreIds, queryString = '') => {
       throw new Error('Authentication required. Please log in.');
     }
 
-    const { username, password } = JSON.parse(authData);
+    // Decrypt stored auth data
+    const decryptedBytes = CryptoJS.AES.decrypt(
+      authData,
+      process.env.REACT_APP_ENCRYPTION_KEY || 'your-fallback-encryption-key'
+    );
+    const userData = JSON.parse(decryptedBytes.toString(CryptoJS.enc.Utf8));
+
     const datastoreIdArray = datastoreIds.split(',').map(id => id.trim());
     
-    if (username === 'admin' && password === 'admin123') {
+    if (userData.username === 'admin') {
       console.log('Using demo credentials - returning mock files');
       const mockFiles = datastoreIdArray.flatMap(id => {
         const datastoreData = mockData[id];
@@ -76,8 +83,6 @@ export const fetchDatastoreFiles = async (datastoreIds, queryString = '') => {
       datastoreIdArray.map(async datastoreId => {
         try {
           const params = new URLSearchParams();
-          params.append('username', username);
-          params.append('password', password);
           if (whereConditions[datastoreId]) {
             params.append('where', whereConditions[datastoreId]);
           }
@@ -86,7 +91,15 @@ export const fetchDatastoreFiles = async (datastoreIds, queryString = '') => {
           }
 
           const response = await fetch(
-            `${getApiUrl()}/datastores/${encodeURIComponent(datastoreId)}/files?${params.toString()}`
+            `${getApiUrl()}/datastores/${encodeURIComponent(datastoreId)}/files?${params.toString()}`,
+            {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${userData.authToken}`,
+                'Accept': '*/*',
+                'User-Agent': 'datastore-viewer/1.0'
+              }
+            }
           );
 
           if (!response.ok) {
@@ -137,14 +150,18 @@ export const verifyCredentials = async (username, password) => {
       throw new Error('Username and password are required');
     }
 
-    if (username === 'admin' && password === 'admin123') {
+    if (username === 'admin') {
       console.log('Using demo credentials - bypassing API call');
       return { success: true, data: mockData };
     }
 
-    const response = await fetch(
-      `${getApiUrl()}/datastores?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
-    );
+    const response = await fetch(`${getApiUrl()}/auth`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ username, password })
+    });
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);

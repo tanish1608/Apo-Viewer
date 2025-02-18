@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import CryptoJS from 'crypto-js';
 import ErrorContainer from '../components/ErrorContainer';
 
 const AuthContext = createContext(null);
@@ -9,6 +10,7 @@ const STORAGE_KEY = 'auth_data';
 const TOKEN_REFRESH_INTERVAL = 14 * 60 * 1000; // 14 minutes
 const SESSION_DURATION = 8 * 60 * 60 * 1000; // 8 hours
 const ACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+const ENCRYPTION_KEY = process.env.REACT_APP_ENCRYPTION_KEY || 'your-fallback-encryption-key';
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -19,13 +21,25 @@ export const AuthProvider = ({ children }) => {
   // Initialize user from storage
   useEffect(() => {
     const initializeAuth = () => {
-      const storedData = localStorage.getItem(STORAGE_KEY);
-      if (storedData) {
+      const encryptedData = localStorage.getItem(STORAGE_KEY);
+      if (encryptedData) {
         try {
-          const userData = JSON.parse(storedData);
-          setUser(userData);
+          // Decrypt the stored data
+          const decryptedBytes = CryptoJS.AES.decrypt(encryptedData, ENCRYPTION_KEY);
+          const decryptedText = decryptedBytes.toString(CryptoJS.enc.Utf8);
+          const userData = JSON.parse(decryptedText);
+          
+          // Check if the session is still valid
+          const now = Date.now();
+          const loginTime = new Date(userData.lastLogin).getTime();
+          
+          if (now - loginTime <= SESSION_DURATION) {
+            setUser(userData);
+          } else {
+            localStorage.removeItem(STORAGE_KEY);
+          }
         } catch (error) {
-          console.error('Failed to parse stored auth data:', error);
+          console.error('Failed to decrypt stored auth data:', error);
           localStorage.removeItem(STORAGE_KEY);
         }
       }
@@ -49,10 +63,26 @@ export const AuthProvider = ({ children }) => {
     if (!user) return;
 
     const updateLastActivity = () => {
-      const userData = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      if (userData) {
-        userData.lastActivity = Date.now();
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
+      const encryptedData = localStorage.getItem(STORAGE_KEY);
+      if (encryptedData) {
+        try {
+          const decryptedBytes = CryptoJS.AES.decrypt(encryptedData, ENCRYPTION_KEY);
+          const decryptedText = decryptedBytes.toString(CryptoJS.enc.Utf8);
+          const userData = JSON.parse(decryptedText);
+          
+          userData.lastActivity = Date.now();
+          
+          // Re-encrypt and store
+          const encryptedUserData = CryptoJS.AES.encrypt(
+            JSON.stringify(userData),
+            ENCRYPTION_KEY
+          ).toString();
+          
+          localStorage.setItem(STORAGE_KEY, encryptedUserData);
+        } catch (error) {
+          console.error('Failed to update activity:', error);
+          handleLogout();
+        }
       }
     };
 
@@ -71,23 +101,32 @@ export const AuthProvider = ({ children }) => {
   // Check session validity
   useEffect(() => {
     const checkSession = () => {
-      const userData = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      if (!userData) return;
+      const encryptedData = localStorage.getItem(STORAGE_KEY);
+      if (!encryptedData) return;
 
-      const now = Date.now();
-      const loginTime = new Date(userData.lastLogin).getTime();
-      const lastActivity = userData.lastActivity || now;
+      try {
+        const decryptedBytes = CryptoJS.AES.decrypt(encryptedData, ENCRYPTION_KEY);
+        const decryptedText = decryptedBytes.toString(CryptoJS.enc.Utf8);
+        const userData = JSON.parse(decryptedText);
 
-      if (now - loginTime > SESSION_DURATION) {
-        addError('Session expired. Please log in again.');
+        const now = Date.now();
+        const loginTime = new Date(userData.lastLogin).getTime();
+        const lastActivity = userData.lastActivity || now;
+
+        if (now - loginTime > SESSION_DURATION) {
+          addError('Session expired. Please log in again.');
+          handleLogout();
+          return;
+        }
+
+        if (now - lastActivity > ACTIVITY_TIMEOUT) {
+          addError('Session timeout due to inactivity. Please log in again.');
+          handleLogout();
+          return;
+        }
+      } catch (error) {
+        console.error('Failed to check session:', error);
         handleLogout();
-        return;
-      }
-
-      if (now - lastActivity > ACTIVITY_TIMEOUT) {
-        addError('Session timeout due to inactivity. Please log in again.');
-        handleLogout();
-        return;
       }
     };
 
@@ -101,15 +140,31 @@ export const AuthProvider = ({ children }) => {
         throw new Error('Username and password are required');
       }
 
+      // Hash the password before sending to the server
+      const hashedPassword = CryptoJS.SHA256(password).toString();
+
+      // Create a one-time token for API authentication
+      const timestamp = Date.now();
+      const authToken = CryptoJS.SHA256(
+        `${username}:${hashedPassword}:${timestamp}`
+      ).toString();
+
       // Demo login logic here...
       const userData = {
         username,
+        authToken,
         lastLogin: new Date().toISOString(),
         lastActivity: Date.now()
       };
 
+      // Encrypt user data before storing
+      const encryptedUserData = CryptoJS.AES.encrypt(
+        JSON.stringify(userData),
+        ENCRYPTION_KEY
+      ).toString();
+
       setUser(userData);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
+      localStorage.setItem(STORAGE_KEY, encryptedUserData);
       return true;
     } catch (error) {
       addError(error.message);
