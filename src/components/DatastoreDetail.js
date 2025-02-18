@@ -43,7 +43,7 @@ function DatastoreDetail() {
   const [showColumnSelector, setShowColumnSelector] = useState(false);
   const [columns, setColumns] = useState([]);
   const [visibleColumns, setVisibleColumns] = useState([]);
-  const [columnOrder, setColumnOrder] = useState([]); // Add this new state
+  const [columnOrder, setColumnOrder] = useState([]); 
   const [error, setError] = useState(null);
   const [errors, setErrors] = useState([]);
   const [searchInput, setSearchInput] = useState('');
@@ -64,16 +64,25 @@ function DatastoreDetail() {
     search: ''
   });
 
-  const addError = (error) => {
+  // Helper functions
+  const addError = useCallback((error) => {
     const id = Date.now();
     setErrors(prev => [...prev, { id, message: error }]);
-  };
+  }, []);
 
-  const removeError = (id) => {
+  const removeError = useCallback((id) => {
     setErrors(prev => prev.filter(error => error.id !== id));
-  };
+  }, []);
 
-  // Combine all click outside handlers into one effect
+  const formatDate = useCallback((date) => {
+    if (!date) return '-';
+    if (date instanceof Date) {
+      return date.toLocaleString();
+    }
+    return date.toString();
+  }, []);
+
+  // Click outside handlers
   useEffect(() => {
     function handleClickOutside(event) {
       if (sortMenuRef.current && !sortMenuRef.current.contains(event.target)) {
@@ -93,21 +102,12 @@ function DatastoreDetail() {
     };
   }, []);
 
-  // Initialize visible columns when columns are set
+  // Initialize visible columns
   useEffect(() => {
     setVisibleColumns(columns);
   }, [columns]);
 
-  // Add this helper function for date formatting
-  const formatDate = (date) => {
-    if (!date) return '-';
-    if (date instanceof Date) {
-      return date.toLocaleString();
-    }
-    return date.toString();
-  };
-
-  // Memoized data processing
+  // Process files
   const processedFiles = useMemo(() => {
     try {
       return files.map(file => ({
@@ -120,19 +120,19 @@ function DatastoreDetail() {
     }
   }, [files]);
 
-  // Optimize search with debouncing and memoization
+  // Search debouncing
   useEffect(() => {
     const timer = setTimeout(() => {
       setFilters(prev => ({
         ...prev,
         search: searchInput.toLowerCase()
       }));
-    }, 500);
+    }, SEARCH_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  // Data fetching with cleanup
+  // Data fetching
   useEffect(() => {
     let mounted = true;
 
@@ -206,7 +206,7 @@ function DatastoreDetail() {
           });
           
           setColumns(sortedColumns);
-          setColumnOrder(sortedColumns); // Store the original order
+          setColumnOrder(sortedColumns);
           setVisibleColumns(sortedColumns);
         }
       } catch (error) {
@@ -228,8 +228,8 @@ function DatastoreDetail() {
     };
   }, [id]);
 
-  // Update the sort handler
-  const handleSort = (field) => {
+  // Handlers
+  const handleSort = useCallback((field) => {
     if (field === 'clear') {
       setSortConfig({
         field: 'creationTime',
@@ -242,40 +242,38 @@ function DatastoreDetail() {
       }));
     }
     setShowSortMenu(false);
-  };
+  }, []);
 
-  // Update the toggleColumn function
-  const toggleColumn = (column) => {
+  const toggleColumn = useCallback((column) => {
     setVisibleColumns(prev => {
       if (prev.includes(column)) {
-        // Remove the column
         return prev.filter(col => col !== column);
       } else {
-        // Add the column back in its original position
         const originalIndex = columnOrder.indexOf(column);
         const newColumns = [...prev];
-        
-        // Find the correct insertion point
         let insertIndex = 0;
         while (insertIndex < newColumns.length && 
                columnOrder.indexOf(newColumns[insertIndex]) < originalIndex) {
           insertIndex++;
         }
-        
-        // Insert the column at the correct position
         newColumns.splice(insertIndex, 0, column);
         return newColumns;
       }
     });
-  };
+  }, [columnOrder]);
 
-  const toggleAllColumns = () => {
+  const toggleAllColumns = useCallback(() => {
     setVisibleColumns(prev => 
       prev.length === columns.length ? [] : [...columns]
     );
-  };
+  }, [columns]);
 
-  // Optimized filtering
+  const getDatastoreName = useCallback((datastoreId) => {
+    const parts = datastoreId.split('.');
+    return parts[parts.length - 1];
+  }, []);
+
+  // Filtered and sorted data
   const filteredFiles = useMemo(() => {
     if (!processedFiles.length) return [];
     
@@ -307,7 +305,6 @@ function DatastoreDetail() {
 
         // Optimize search
         if (searchTerm) {
-          // Only search through specific columns for better performance
           const searchableColumns = ['fileName', 'fileId', 'fileType', 'clientName'];
           return searchableColumns.some(column => {
             const value = file[column];
@@ -341,11 +338,16 @@ function DatastoreDetail() {
     return result;
   }, [processedFiles, filters, sortConfig]);
 
-  const getDatastoreName = useCallback((id) => {
-    const parts = id.split('.');
-    return parts[parts.length - 1];
-  }, []);
-  
+  // Filter options
+  const filterOptions = useMemo(() => {
+    return {
+      status: Array.from(new Set(files.map(file => file.status).filter(Boolean))),
+      fileType: Array.from(new Set(files.map(file => file.fileType).filter(Boolean))),
+      direction: Array.from(new Set(files.map(file => file.direction).filter(Boolean)))
+    };
+  }, [files]);
+
+  // Export functions
   const downloadExcel = useCallback(async () => {
     try {
       setExportLoading(true);
@@ -355,7 +357,6 @@ function DatastoreDetail() {
         return;
       }
 
-      // Process in batches
       const workbook = XLSX.utils.book_new();
       let wsData = [];
       
@@ -380,10 +381,9 @@ function DatastoreDetail() {
     } finally {
       setExportLoading(false);
     }
-  }, [filteredFiles, visibleColumns, id, getDatastoreName]);
+  }, [filteredFiles, visibleColumns, id, getDatastoreName, addError]);
 
   const downloadCSV = useCallback(() => {
-    // Only use visible columns for the header
     const csvContent = [
       visibleColumns.map(column => formatColumnHeader(column)).join(','),
       ...files.map(file => 
@@ -406,6 +406,49 @@ function DatastoreDetail() {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   }, [files, visibleColumns, id, getDatastoreName]);
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="loading-container">
+        <div>
+          <div className="loading-spinner"></div>
+          <div className="loading-text">Loading files...</div>
+        </div>
+      </div>
+    );
+  }
+
+  const formatColumnHeader = (column) => {
+    return column
+      .replace(/([A-Z])/g, ' $1')
+      .replace(/^./, str => str.toUpperCase())
+      .trim();
+  };
+
+  const handleFilterChange = (filterType, value) => {
+    setFilters(prev => ({
+      ...prev,
+      [filterType]: value
+    }));
+    setCurrentPage(1);
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      dateRange: { start: '', end: '', preset: '' },
+      status: [],
+      fileType: [],
+      direction: [],
+      clientName: '',
+      search: ''
+    });
+    setSearchInput('');
+  };
+
+  const handleSearchChange = (e) => {
+    setSearchInput(e.target.value);
+  };
 
   const handleDatePresetChange = (preset) => {
     const today = new Date();
@@ -466,49 +509,10 @@ function DatastoreDetail() {
     }));
   };
 
-  const filterOptions = useMemo(() => {
-    return {
-      status: Array.from(new Set(files.map(file => file.status).filter(Boolean))),
-      fileType: Array.from(new Set(files.map(file => file.fileType).filter(Boolean))),
-      direction: Array.from(new Set(files.map(file => file.direction).filter(Boolean)))
-    };
-  }, [files]);
-
   const totalPages = Math.ceil(filteredFiles.length / ITEMS_PER_PAGE);
   const visibleRange = {
     start: (currentPage - 1) * ITEMS_PER_PAGE,
     end: currentPage * ITEMS_PER_PAGE
-  };
-
-  const formatColumnHeader = (column) => {
-    return column
-      .replace(/([A-Z])/g, ' $1')
-      .replace(/^./, str => str.toUpperCase())
-      .trim();
-  };
-
-  const handleFilterChange = (filterType, value) => {
-    setFilters(prev => ({
-      ...prev,
-      [filterType]: value
-    }));
-    setCurrentPage(1);
-  };
-
-  const clearFilters = () => {
-    setFilters({
-      dateRange: { start: '', end: '', preset: '' },
-      status: [],
-      fileType: [],
-      direction: [],
-      clientName: '',
-      search: ''
-    });
-    setSearchInput('');
-  };
-
-  const handleSearchChange = (e) => {
-    setSearchInput(e.target.value);
   };
 
   const FilterSection = ({ title, options, selectedValues, onChange }) => {
@@ -539,14 +543,6 @@ function DatastoreDetail() {
       </div>
     );
   };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="loading-spinner"></div>
-      </div>
-    );
-  }
 
   return (
     <div className="container">

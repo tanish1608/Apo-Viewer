@@ -1,38 +1,40 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import '../styles/Error.css';
 
 const ERROR_TIMEOUT = 5000; // 5 seconds
 
-const ErrorToast = ({ error, onDismiss, timeout = ERROR_TIMEOUT }) => {
+const ErrorToast = ({ error, onDismiss }) => {
   const [removing, setRemoving] = useState(false);
-
-  const dismiss = useCallback(() => {
-    setRemoving(true);
-    setTimeout(() => {
-      onDismiss();
-    }, 300); // Match animation duration
-  }, [onDismiss]);
 
   useEffect(() => {
     if (error) {
-      const timer = setTimeout(dismiss, timeout);
+      const timer = setTimeout(() => {
+        setRemoving(true);
+        setTimeout(() => {
+          onDismiss();
+        }, 300); // Match animation duration
+      }, ERROR_TIMEOUT);
+
       return () => clearTimeout(timer);
     }
-  }, [error, timeout, dismiss]);
+  }, [error, onDismiss]);
 
   if (!error) return null;
 
   return (
-    <div className={`error-message ${removing ? 'removing' : ''}`}>
+    <div className={`error-toast ${removing ? 'removing' : ''}`}>
       <div className="error-content">
-        <h3 className="error-title">Error</h3>
-        <p className="error-text">{error}</p>
+        <i className="fas fa-exclamation-circle error-icon"></i>
+        <div className="error-message-content">
+          <h3 className="error-title">Error</h3>
+          <p className="error-text">{error}</p>
+        </div>
       </div>
-      <button className="error-dismiss" onClick={dismiss}>
+      <button className="error-dismiss" onClick={() => setRemoving(true)}>
         <i className="fas fa-times"></i>
       </button>
     </div>
   );
 };
 
-export default ErrorToast
+export default ErrorToast;
