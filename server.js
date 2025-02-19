@@ -2,19 +2,16 @@ const express = require('express');
 const fetch = require('node-fetch');
 const cors = require('cors');
 const https = require('https');
-const crypto = require('crypto');
-const jwt = require('jsonwebtoken');
+const CryptoJS = require('crypto-js');
 
 const app = express();
 const PORT = 5000;
 
-// Security constants
-const JWT_SECRET = process.env.JWT_SECRET || 'your-jwt-secret-key';
-const API_SECRET = process.env.API_SECRET || 'your-api-secret-key';
-const TOKEN_EXPIRY = '8h';
-
 // API Base URL
 const BASE_URL = 'https://mt-conn-core-api-dev.hk.hsbc:14100/api/sil/element-dna';
+
+// Encryption key - should match the client's key
+const ENCRYPTION_KEY = process.env.REACT_APP_ENCRYPTION_KEY || 'your-fallback-encryption-key';
 
 // Create an agent that allows self-signed SSL certificates
 const agent = new https.Agent({
@@ -27,60 +24,28 @@ app.use(express.json());
 // Enable CORS for frontend testing
 app.use(cors());
 
-// Verify request signature
-const verifySignature = (req) => {
-  const timestamp = req.headers['x-auth-timestamp'];
-  const nonce = req.headers['x-auth-nonce'];
-  const signature = req.headers['x-auth-signature'];
-  const username = req.headers['x-auth-username'];
-
-  if (!timestamp || !nonce || !signature || !username) {
-    return false;
+// Function to decrypt auth data
+const decryptAuthData = (encryptedData) => {
+  try {
+    const bytes = CryptoJS.AES.decrypt(encryptedData, ENCRYPTION_KEY);
+    const decryptedData = bytes.toString(CryptoJS.enc.Utf8);
+    return JSON.parse(decryptedData);
+  } catch (error) {
+    console.error('Decryption error:', error);
+    return null;
   }
-
-  // Check timestamp freshness (5 minutes)
-  if (Date.now() - parseInt(timestamp) > 5 * 60 * 1000) {
-    return false;
-  }
-
-  // Verify signature
-  const expectedSignature = crypto
-    .createHmac('sha256', API_SECRET)
-    .update(`${username}:${req.headers['x-auth-password']}:${timestamp}:${nonce}`)
-    .digest('hex');
-
-  return crypto.timingSafeEqual(
-    Buffer.from(signature),
-    Buffer.from(expectedSignature)
-  );
 };
 
-// Middleware to verify JWT and extract credentials
-const verifyToken = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'No token provided' });
-  }
-
-  const token = authHeader.split(' ')[1];
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
-    
-    // Decrypt the credentials from the token
-    const decipher = crypto.createDecipher('aes-256-cbc', JWT_SECRET);
-    let decrypted = decipher.update(decoded.credentials, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    
-    const credentials = JSON.parse(decrypted);
-    req.user.username = credentials.username;
-    req.user.password = credentials.password;
-    
-    next();
-  } catch (error) {
-    return res.status(401).json({ error: 'Invalid token' });
-  }
+// Function to generate Basic Auth headers
+const getBasicAuthHeaders = (username, password) => {
+  const credentials = Buffer.from(`${username}:${password}`).toString('base64');
+  console.log('Using credentials for API call:', { username });
+  
+  return {
+    'Authorization': `Basic ${credentials}`,
+    'Accept': '*/*',
+    'User-Agent': 'datastore-viewer/1.0'
+  };
 };
 
 // Function to process chunked responses
@@ -90,37 +55,55 @@ const processChunkedResponse = async (response, res) => {
   res.send(rawdata.toString());
 };
 
-// Verify the auth data
+// Auth endpoint
 app.post('/auth', (req, res) => {
-  const { username, password } = req.body;
-
-  if (!username || !password) {
-    return res.status(400).json({ error: 'Username and password are required' });
+  const { encryptedAuth } = req.body;
+  
+  if (!encryptedAuth) {
+    return res.status(400).json({ error: 'Missing auth data' });
   }
 
-  // Encrypt credentials for token
-  const cipher = crypto.createCipher('aes-256-cbc', JWT_SECRET);
-  let encrypted = cipher.update(JSON.stringify({ username, password }), 'utf8', 'hex');
-  encrypted += cipher.final('hex');
-  
-  // Generate JWT token with encrypted credentials
-  const token = jwt.sign(
-    { 
-      username,
-      credentials: encrypted
-    },
-    JWT_SECRET,
-    { expiresIn: TOKEN_EXPIRY }
-  );
+  const authData = decryptAuthData(encryptedAuth);
+  if (!authData || !authData.username || !authData.password) {
+    return res.status(400).json({ error: 'Invalid auth data' });
+  }
 
-  res.json({ token });
+  console.log('Authenticating user:', authData.username);
+  
+  const apiUrl = `${BASE_URL}/auth`;
+  fetch(apiUrl, {
+    method: 'GET',
+    headers: getBasicAuthHeaders(authData.username, authData.password),
+    agent
+  })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return response.json();
+    })
+    .then(data => {
+      res.json(data);
+    })
+    .catch(error => {
+      console.error('Error fetching auth:', error);
+      res.status(500).json({ error: 'Failed to fetch auth' });
+    });
 });
 
-// Update the datastore files endpoint to handle where and sortBy parameters
-app.get('/datastores/:id/files', verifyToken, async (req, res) => {
-  const { where, sortBy } = req.query;
+// Datastore files endpoint
+app.get('/datastores/:id/files', async (req, res) => {
+  const { encryptedAuth, where, sortBy } = req.query;
   const { id } = req.params;
-  const { username, password } = req.user;
+
+  if (!encryptedAuth) {
+    return res.status(400).json({ error: 'Missing auth data' });
+  }
+
+  const authData = decryptAuthData(encryptedAuth);
+  if (!authData || !authData.username || !authData.password) {
+    return res.status(400).json({ error: 'Invalid auth data' });
+  }
 
   try {
     // Build the query string for the API
@@ -131,16 +114,8 @@ app.get('/datastores/:id/files', verifyToken, async (req, res) => {
     const apiUrl = `${BASE_URL}/datastores/${encodeURIComponent(id)}/files${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
     
     const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': '*/*',
-        'User-Agent': 'datastore-viewer/1.0'
-      },
-      body: JSON.stringify({
-        username,
-        password
-      }),
+      method: 'GET',
+      headers: getBasicAuthHeaders(authData.username, authData.password),
       agent
     });
 
