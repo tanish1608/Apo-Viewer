@@ -29,12 +29,16 @@ export const AuthProvider = ({ children }) => {
           const decryptedText = decryptedBytes.toString(CryptoJS.enc.Utf8);
           const userData = JSON.parse(decryptedText);
           
-          // Check if the session is still valid
-          const now = Date.now();
-          const loginTime = new Date(userData.lastLogin).getTime();
-          
-          if (now - loginTime <= SESSION_DURATION) {
-            setUser(userData);
+          if (userData && userData.lastLogin) {
+            // Check if the session is still valid
+            const now = Date.now();
+            const loginTime = new Date(userData.lastLogin).getTime();
+            
+            if (now - loginTime <= SESSION_DURATION) {
+              setUser(userData);
+            } else {
+              localStorage.removeItem(STORAGE_KEY);
+            }
           } else {
             localStorage.removeItem(STORAGE_KEY);
           }
@@ -70,15 +74,17 @@ export const AuthProvider = ({ children }) => {
           const decryptedText = decryptedBytes.toString(CryptoJS.enc.Utf8);
           const userData = JSON.parse(decryptedText);
           
-          userData.lastActivity = Date.now();
-          
-          // Re-encrypt and store
-          const encryptedUserData = CryptoJS.AES.encrypt(
-            JSON.stringify(userData),
-            ENCRYPTION_KEY
-          ).toString();
-          
-          localStorage.setItem(STORAGE_KEY, encryptedUserData);
+          if (userData) {
+            userData.lastActivity = Date.now();
+            
+            // Re-encrypt and store
+            const encryptedUserData = CryptoJS.AES.encrypt(
+              JSON.stringify(userData),
+              ENCRYPTION_KEY
+            ).toString();
+            
+            localStorage.setItem(STORAGE_KEY, encryptedUserData);
+          }
         } catch (error) {
           console.error('Failed to update activity:', error);
           handleLogout();
@@ -109,20 +115,24 @@ export const AuthProvider = ({ children }) => {
         const decryptedText = decryptedBytes.toString(CryptoJS.enc.Utf8);
         const userData = JSON.parse(decryptedText);
 
-        const now = Date.now();
-        const loginTime = new Date(userData.lastLogin).getTime();
-        const lastActivity = userData.lastActivity || now;
+        if (userData && userData.lastLogin) {
+          const now = Date.now();
+          const loginTime = new Date(userData.lastLogin).getTime();
+          const lastActivity = userData.lastActivity || now;
 
-        if (now - loginTime > SESSION_DURATION) {
-          addError('Session expired. Please log in again.');
-          handleLogout();
-          return;
-        }
+          if (now - loginTime > SESSION_DURATION) {
+            addError('Session expired. Please log in again.');
+            handleLogout();
+            return;
+          }
 
-        if (now - lastActivity > ACTIVITY_TIMEOUT) {
-          addError('Session timeout due to inactivity. Please log in again.');
+          if (now - lastActivity > ACTIVITY_TIMEOUT) {
+            addError('Session timeout due to inactivity. Please log in again.');
+            handleLogout();
+            return;
+          }
+        } else {
           handleLogout();
-          return;
         }
       } catch (error) {
         console.error('Failed to check session:', error);
@@ -140,19 +150,10 @@ export const AuthProvider = ({ children }) => {
         throw new Error('Username and password are required');
       }
 
-      // Hash the password before sending to the server
-      const hashedPassword = CryptoJS.SHA256(password).toString();
-
-      // Create a one-time token for API authentication
-      const timestamp = Date.now();
-      const authToken = CryptoJS.SHA256(
-        `${username}:${hashedPassword}:${timestamp}`
-      ).toString();
-
-      // Demo login logic here...
+      // Create user data object
       const userData = {
         username,
-        authToken,
+        password, // We need to store this for Basic Auth
         lastLogin: new Date().toISOString(),
         lastActivity: Date.now()
       };
