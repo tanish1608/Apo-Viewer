@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import HelpPanel from './HelpPanel';
+import { DateRangePicker } from 'rsuite';
+import 'rsuite/dist/rsuite.min.css';
 import '../styles/DatastoreList.css';
 
 // Environment configurations
@@ -11,9 +13,35 @@ const ENV_CONFIGS = {
   env3: 'https://api-env3.example.com'
 };
 
+// Filter field options
+const FILTER_FIELDS = [
+  { value: 'status', label: 'Status' },
+  { value: 'fileType', label: 'File Type' },
+  { value: 'fileId', label: 'File UUID' },
+  { value: 'fileName', label: 'File Name' },
+  { value: 'clientName', label: 'Client Name' },
+  { value: 'direction', label: 'Direction' }
+];
+
+// Condition options
+const CONDITION_OPTIONS = [
+  { value: '=', label: 'Equals (=)' },
+  { value: '!=', label: 'Not Equals (!=)' },
+  { value: 'LIKE', label: 'Contains (LIKE)' },
+  { value: 'NOT LIKE', label: 'Not Contains (NOT LIKE)' },
+  { value: '>', label: 'Greater Than (>)' },
+  { value: '<', label: 'Less Than (<)' },
+  { value: '>=', label: 'Greater Than or Equal (>=)' },
+  { value: '<=', label: 'Less Than or Equal (<=)' }
+];
+
 function DatastoreList() {
   const [searchFields, setSearchFields] = useState([
-    { datastoreId: '', whereClause: '', sortBy: '' }
+    { 
+      datastoreId: '', 
+      filters: [{ field: 'status', condition: '=', value: '' }],
+      dateRange: [null, null]
+    }
   ]);
   const [selectedEnv, setSelectedEnv] = useState(() => {
     return localStorage.getItem('selected_env') || 'env1';
@@ -31,7 +59,11 @@ function DatastoreList() {
   const handleAddDatastore = () => {
     setSearchFields([
       ...searchFields,
-      { datastoreId: '', whereClause: '', sortBy: '' }
+      { 
+        datastoreId: '', 
+        filters: [{ field: 'status', condition: '=', value: '' }],
+        dateRange: [null, null]
+      }
     ]);
   };
 
@@ -41,10 +73,62 @@ function DatastoreList() {
     }
   };
 
-  const handleFieldChange = (index, field, value) => {
+  const handleDatastoreIdChange = (index, value) => {
     const newFields = [...searchFields];
-    newFields[index] = { ...newFields[index], [field]: value };
+    newFields[index] = { ...newFields[index], datastoreId: value };
     setSearchFields(newFields);
+  };
+
+  const handleAddFilter = (datastoreIndex) => {
+    const newFields = [...searchFields];
+    newFields[datastoreIndex].filters.push({ field: 'status', condition: '=', value: '' });
+    setSearchFields(newFields);
+  };
+
+  const handleRemoveFilter = (datastoreIndex, filterIndex) => {
+    const newFields = [...searchFields];
+    if (newFields[datastoreIndex].filters.length > 1) {
+      newFields[datastoreIndex].filters = newFields[datastoreIndex].filters.filter(
+        (_, i) => i !== filterIndex
+      );
+      setSearchFields(newFields);
+    }
+  };
+
+  const handleFilterChange = (datastoreIndex, filterIndex, key, value) => {
+    const newFields = [...searchFields];
+    newFields[datastoreIndex].filters[filterIndex][key] = value;
+    setSearchFields(newFields);
+  };
+
+  const handleDateRangeChange = (datastoreIndex, value) => {
+    const newFields = [...searchFields];
+    newFields[datastoreIndex].dateRange = value;
+    setSearchFields(newFields);
+  };
+
+  const buildWhereClause = (filters, dateRange) => {
+    const conditions = [];
+    
+    // Add filter conditions
+    filters.forEach(filter => {
+      if (filter.field && filter.condition && filter.value) {
+        if (filter.condition === 'LIKE' || filter.condition === 'NOT LIKE') {
+          conditions.push(`${filter.field} ${filter.condition} '%${filter.value}%'`);
+        } else {
+          conditions.push(`${filter.field} ${filter.condition} '${filter.value}'`);
+        }
+      }
+    });
+    
+    // Add date range condition if present
+    if (dateRange[0] && dateRange[1]) {
+      const startDate = Math.floor(dateRange[0].getTime());
+      const endDate = Math.floor(dateRange[1].getTime());
+      conditions.push(`processingEndDate >= '${startDate}' AND processingEndDate <= '${endDate}'`);
+    }
+    
+    return conditions.length > 0 ? conditions.join(' AND ') : '';
   };
 
   const handleSubmit = (e) => {
@@ -66,11 +150,9 @@ function DatastoreList() {
 
     const queryParams = new URLSearchParams();
     validFields.forEach(field => {
-      if (field.whereClause.trim()) {
-        queryParams.append('where', field.whereClause.trim());
-      }
-      if (field.sortBy.trim()) {
-        queryParams.append('sortBy', field.sortBy.trim());
+      const whereClause = buildWhereClause(field.filters, field.dateRange);
+      if (whereClause) {
+        queryParams.append('where', whereClause);
       }
     });
 
@@ -129,14 +211,14 @@ function DatastoreList() {
               </div>
             </div>
             
-            {searchFields.map((field, index) => (
-              <div key={index} className="datastore-box">
+            {searchFields.map((field, datastoreIndex) => (
+              <div key={datastoreIndex} className="datastore-box">
                 <div className="datastore-header">
-                  <h3 className="datastore-title">Datastore {index + 1}</h3>
+                  <h3 className="datastore-title">Datastore {datastoreIndex + 1}</h3>
                   {searchFields.length > 1 && (
                     <button
                       type="button"
-                      onClick={() => handleRemoveDatastore(index)}
+                      onClick={() => handleRemoveDatastore(datastoreIndex)}
                       className="remove-button"
                     >
                       <i className="fas fa-times"></i>
@@ -146,14 +228,14 @@ function DatastoreList() {
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor={`datastoreId-${index}`} className="form-label">
+                  <label htmlFor={`datastoreId-${datastoreIndex}`} className="form-label">
                     Datastore ID <span className="required">*</span>
                   </label>
                   <input
-                    id={`datastoreId-${index}`}
+                    id={`datastoreId-${datastoreIndex}`}
                     type="text"
                     value={field.datastoreId}
-                    onChange={(e) => handleFieldChange(index, 'datastoreId', e.target.value)}
+                    onChange={(e) => handleDatastoreIdChange(datastoreIndex, e.target.value)}
                     className="form-input"
                     placeholder="Enter datastore IDs (e.g., HSBCUserAction, HSBCTestActivity)"
                   />
@@ -163,37 +245,81 @@ function DatastoreList() {
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor={`whereClause-${index}`} className="form-label">
-                    Where Clause
-                  </label>
-                  <input
-                    id={`whereClause-${index}`}
-                    type="text"
-                    value={field.whereClause}
-                    onChange={(e) => handleFieldChange(index, 'whereClause', e.target.value)}
-                    className="form-input"
-                    placeholder="Enter where clause (optional)"
+                  <label className="form-label">Date Range</label>
+                  <DateRangePicker 
+                    className="date-range-picker"
+                    value={field.dateRange}
+                    onChange={(value) => handleDateRangeChange(datastoreIndex, value)}
+                    placeholder="Select date range"
+                    format="yyyy-MM-dd"
+                    block
                   />
-                  <p className="help-text">
-                    Example: status='SUCCESS' AND fileType='PDF'
-                  </p>
                 </div>
 
-                <div className="form-group">
-                  <label htmlFor={`sortBy-${index}`} className="form-label">
-                    Sort By
-                  </label>
-                  <input
-                    id={`sortBy-${index}`}
-                    type="text"
-                    value={field.sortBy}
-                    onChange={(e) => handleFieldChange(index, 'sortBy', e.target.value)}
-                    className="form-input"
-                    placeholder="Enter sort criteria (optional)"
-                  />
-                  <p className="help-text">
-                    Example: creationTime DESC
-                  </p>
+                <div className="filters-section">
+                  <div className="filters-header">
+                    <label className="form-label">Filters</label>
+                    <button
+                      type="button"
+                      onClick={() => handleAddFilter(datastoreIndex)}
+                      className="add-filter-button"
+                    >
+                      <i className="fas fa-plus"></i>
+                      Add Filter
+                    </button>
+                  </div>
+                  
+                  {field.filters.map((filter, filterIndex) => (
+                    <div key={filterIndex} className="filter-row">
+                      <div className="filter-field">
+                        <select
+                          value={filter.field}
+                          onChange={(e) => handleFilterChange(datastoreIndex, filterIndex, 'field', e.target.value)}
+                          className="form-input"
+                        >
+                          {FILTER_FIELDS.map(option => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      <div className="filter-condition">
+                        <select
+                          value={filter.condition}
+                          onChange={(e) => handleFilterChange(datastoreIndex, filterIndex, 'condition', e.target.value)}
+                          className="form-input"
+                        >
+                          {CONDITION_OPTIONS.map(option => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      <div className="filter-value">
+                        <input
+                          type="text"
+                          value={filter.value}
+                          onChange={(e) => handleFilterChange(datastoreIndex, filterIndex, 'value', e.target.value)}
+                          className="form-input"
+                          placeholder="Enter value"
+                        />
+                      </div>
+                      
+                      {field.filters.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveFilter(datastoreIndex, filterIndex)}
+                          className="remove-filter-button"
+                        >
+                          <i className="fas fa-times"></i>
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             ))}

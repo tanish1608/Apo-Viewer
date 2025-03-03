@@ -300,6 +300,93 @@ select.form-input:focus {
   animation: slideIn 0.3s ease-out;
 }
 
+/* Filter Styles */
+.filters-section {
+  margin-bottom: 16px;
+}
+
+.filters-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.add-filter-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  color: #475569;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.add-filter-button:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.add-filter-button i {
+  font-size: 10px;
+}
+
+.filter-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 2fr auto;
+  gap: 12px;
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+.filter-field,
+.filter-condition,
+.filter-value {
+  width: 100%;
+}
+
+.remove-filter-button {
+  background: none;
+  border: none;
+  color: #ef4444;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.remove-filter-button:hover {
+  background: #fef2f2;
+}
+
+/* Date Range Picker Styles */
+.date-range-picker {
+  width: 100%;
+}
+
+/* Override RSuite styles */
+.rs-picker-toggle {
+  padding: 7px 12px !important;
+  font-size: 13px !important;
+}
+
+.rs-picker-toggle-textbox {
+  padding: 0 !important;
+}
+
+.rs-picker-toggle-caret {
+  top: 8px !important;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .container {
@@ -337,5 +424,14 @@ select.form-input:focus {
 
   .env-select {
     width: 100% !important;
+  }
+
+  .filter-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .remove-filter-button {
+    justify-self: flex-end;
   }
 }
