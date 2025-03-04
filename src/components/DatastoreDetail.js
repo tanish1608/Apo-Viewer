@@ -16,13 +16,13 @@ const SEARCH_DEBOUNCE_MS = 300;
 const EXPORT_BATCH_SIZE = 1000;
 
 // Date presets
-// const DATE_PRESETS = [
-//   { label: 'Today', value: 'today' },
-//   { label: 'Yesterday', value: 'yesterday' },
-//   { label: 'Last 7 days', value: '7days' },
-//   { label: 'Last 30 days', value: '30days' },
-//   { label: 'Custom', value: 'custom' }
-// ];
+const DATE_PRESETS = [
+  { label: 'Today', value: 'today' },
+  { label: 'Yesterday', value: 'yesterday' },
+  { label: 'Last 7 days', value: '7days' },
+  { label: 'Last 30 days', value: '30days' },
+  { label: 'Custom', value: 'custom' }
+];
 
 // Helper function to format column headers - moved to the top level
 const formatColumnHeader = (column) => {
@@ -34,7 +34,7 @@ const formatColumnHeader = (column) => {
 
 function DatastoreDetail() {
   // Refs for optimization
-  // const searchDebounceTimer = useRef(null);
+  const searchDebounceTimer = useRef(null);
   const tableRef = useRef(null);
   const sortMenuRef = useRef(null);
   const columnSelectorRef = useRef(null);
@@ -52,7 +52,7 @@ function DatastoreDetail() {
   const [columns, setColumns] = useState([]);
   const [visibleColumns, setVisibleColumns] = useState([]);
   const [columnOrder, setColumnOrder] = useState([]); 
-  const [setError] = useState(null);
+  const [error, setError] = useState(null);
   const [errors, setErrors] = useState([]);
   const [searchInput, setSearchInput] = useState('');
   const [columnSearchInput, setColumnSearchInput] = useState('');
@@ -235,7 +235,7 @@ function DatastoreDetail() {
     return () => {
       mounted = false;
     };
-  }, [id, setError]);
+  }, [id]);
 
   // Handlers
   const handleSort = useCallback((field) => {
