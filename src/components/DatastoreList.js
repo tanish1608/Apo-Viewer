@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import HelpPanel from './HelpPanel';
 import { DateRangePicker } from 'rsuite';
+// import Select from 'react-select';
+import CreatableSelect from 'react-select/creatable';
 import 'rsuite/dist/rsuite.min.css';
 import '../styles/DatastoreList.css';
 
@@ -12,6 +14,16 @@ const ENV_CONFIGS = {
   env2: 'https://api-env2.example.com',
   env3: 'https://api-env3.example.com'
 };
+
+// Default datastore options
+const DEFAULT_DATASTORES = [
+  { value: 'com.seeburger.sil.hsbc.HSBCUserAction', label: 'HSBCUserAction' },
+  { value: 'com.seeburger.sil.hsbc.HSBCTestActivity', label: 'HSBCTestActivity' },
+  { value: 'com.seeburger.sil.hsbc.PaymentProcessing', label: 'PaymentProcessing' },
+  { value: 'com.seeburger.sil.hsbc.TransactionMonitor', label: 'TransactionMonitor' },
+  { value: 'com.seeburger.sil.hsbc.AuditLogger', label: 'AuditLogger' },
+  { value: 'com.seeburger.sil.hsbc.ReportGenerator', label: 'ReportGenerator' }
+];
 
 // Filter field options
 const FILTER_FIELDS = [
@@ -40,6 +52,7 @@ function DatastoreList() {
     { 
       datastoreId: '', 
       filters: [{ field: 'status', condition: '=', value: '' }],
+      customWhereCondition: undefined,
       dateRange: [null, null]
     }
   ]);
@@ -62,6 +75,7 @@ function DatastoreList() {
       { 
         datastoreId: '', 
         filters: [{ field: 'status', condition: '=', value: '' }],
+        customWhereCondition: undefined,
         dateRange: [null, null]
       }
     ]);
@@ -73,9 +87,25 @@ function DatastoreList() {
     }
   };
 
-  const handleDatastoreIdChange = (index, value) => {
+  const handleDatastoreIdChange = (index, selectedOption) => {
     const newFields = [...searchFields];
-    newFields[index] = { ...newFields[index], datastoreId: value };
+    if (selectedOption) {
+      if (Array.isArray(selectedOption)) {
+        // For multi-select
+        newFields[index] = { 
+          ...newFields[index], 
+          datastoreId: selectedOption.map(option => option.value).join(',') 
+        };
+      } else {
+        // For single select
+        newFields[index] = { 
+          ...newFields[index], 
+          datastoreId: selectedOption.value 
+        };
+      }
+    } else {
+      newFields[index] = { ...newFields[index], datastoreId: '' };
+    }
     setSearchFields(newFields);
   };
 
@@ -101,13 +131,25 @@ function DatastoreList() {
     setSearchFields(newFields);
   };
 
+  const handleCustomWhereConditionChange = (datastoreIndex, value) => {
+    const newFields = [...searchFields];
+    newFields[datastoreIndex].customWhereCondition = value;
+    setSearchFields(newFields);
+  };
+
   const handleDateRangeChange = (datastoreIndex, value) => {
     const newFields = [...searchFields];
     newFields[datastoreIndex].dateRange = value;
     setSearchFields(newFields);
   };
 
-  const buildWhereClause = (filters, dateRange) => {
+  const convertToUnixTimestamp = (date) => {
+    if (!date) return null;
+    // Convert to UTC then to Unix timestamp in milliseconds
+    return Math.floor(new Date(date).getTime());
+  };
+
+  const buildWhereClause = (filters, dateRange, customWhereCondition) => {
     const conditions = [];
     
     // Add filter conditions
@@ -122,10 +164,18 @@ function DatastoreList() {
     });
     
     // Add date range condition if present
-    if (dateRange[0] && dateRange[1]) {
-      const startDate = Math.floor(dateRange[0].getTime());
-      const endDate = Math.floor(dateRange[1].getTime());
-      conditions.push(`processingEndDate >= '${startDate}' AND processingEndDate <= '${endDate}'`);
+    // Safely check if dateRange is an array and has valid start and end dates
+    if (Array.isArray(dateRange) && dateRange.length === 2 && dateRange[0] && dateRange[1]) {
+      const startDate = convertToUnixTimestamp(dateRange[0]);
+      const endDate = convertToUnixTimestamp(dateRange[1]);
+      if (startDate && endDate) {
+        conditions.push(`creationTime >= '${startDate}' AND creationTime <= '${endDate}'`);
+      }
+    }
+    
+    // Add custom where condition if present
+    if (customWhereCondition && customWhereCondition.trim()) {
+      conditions.push(`(${customWhereCondition.trim()})`);
     }
     
     return conditions.length > 0 ? conditions.join(' AND ') : '';
@@ -150,7 +200,7 @@ function DatastoreList() {
 
     const queryParams = new URLSearchParams();
     validFields.forEach(field => {
-      const whereClause = buildWhereClause(field.filters, field.dateRange);
+      const whereClause = buildWhereClause(field.filters, field.dateRange, field.customWhereCondition);
       if (whereClause) {
         queryParams.append('where', whereClause);
       }
@@ -159,6 +209,22 @@ function DatastoreList() {
     const datastoreIds = validFields.map(field => encodeURIComponent(field.datastoreId.trim())).join(',');
     const queryString = queryParams.toString();
     navigate(`/datastore/${datastoreIds}${queryString ? `?${queryString}` : ''}`);
+  };
+
+  // Get current datastore value as a Select option
+  const getDatastoreSelectValue = (index) => {
+    const datastoreId = searchFields[index].datastoreId;
+    if (!datastoreId) return null;
+    
+    const ids = datastoreId.split(',').map(id => id.trim());
+    
+    // Check if the value exists in our default options
+    const options = ids.map(id => {
+      const existingOption = DEFAULT_DATASTORES.find(option => option.value === id);
+      return existingOption || { value: id, label: id.split('.').pop() };
+    });
+    
+    return options;
   };
 
   return (
@@ -231,42 +297,66 @@ function DatastoreList() {
                   <label htmlFor={`datastoreId-${datastoreIndex}`} className="form-label">
                     Datastore ID <span className="required">*</span>
                   </label>
-                  <input
+                  <CreatableSelect
                     id={`datastoreId-${datastoreIndex}`}
-                    type="text"
-                    value={field.datastoreId}
-                    onChange={(e) => handleDatastoreIdChange(datastoreIndex, e.target.value)}
-                    className="form-input"
-                    placeholder="Enter datastore IDs (e.g., HSBCUserAction, HSBCTestActivity)"
+                    value={getDatastoreSelectValue(datastoreIndex)}
+                    onChange={(selectedOption) => handleDatastoreIdChange(datastoreIndex, selectedOption)}
+                    options={DEFAULT_DATASTORES}
+                    className="datastore-select"
+                    classNamePrefix="datastore-select"
+                    placeholder="Select or type datastore ID..."
+                    isMulti
+                    isClearable
+                    isSearchable
+                    formatCreateLabel={(inputValue) => `Use "${inputValue}"`}
+                    createOptionPosition="first"
                   />
                   <p className="help-text">
-                    You can enter multiple datastore IDs separated by commas
+                    Select from common datastores or type your own. Multiple datastores can be selected.
                   </p>
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Date Range</label>
+                  <label className="form-label">Date & Time Range</label>
                   <DateRangePicker 
                     className="date-range-picker"
                     value={field.dateRange}
                     onChange={(value) => handleDateRangeChange(datastoreIndex, value)}
-                    placeholder="Select date range"
-                    format="yyyy-MM-dd"
+                    placeholder="Select date and time range"
+                    format="yyyy-MM-dd HH:mm:ss"
                     block
+                    showMeridian
                   />
+                  <p className="help-text">
+                    Times are converted to GMT and Unix timestamps for querying creationTime
+                  </p>
                 </div>
 
                 <div className="filters-section">
                   <div className="filters-header">
                     <label className="form-label">Filters</label>
-                    <button
-                      type="button"
-                      onClick={() => handleAddFilter(datastoreIndex)}
-                      className="add-filter-button"
-                    >
-                      <i className="fas fa-plus"></i>
-                      Add Filter
-                    </button>
+                    <div className="filter-buttons">
+                      <button
+                        type="button"
+                        onClick={() => handleAddFilter(datastoreIndex)}
+                        className="add-filter-button"
+                      >
+                        <i className="fas fa-plus"></i>
+                        Add Filter
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newFields = [...searchFields];
+                          newFields[datastoreIndex].customWhereCondition = newFields[datastoreIndex].customWhereCondition || '';
+                          setSearchFields(newFields);
+                        }}
+                        className="add-custom-where-button"
+                      >
+                        <i className="fas fa-code"></i>
+                        Custom Where
+                      </button>
+                    </div>
                   </div>
                   
                   {field.filters.map((filter, filterIndex) => (
@@ -320,6 +410,35 @@ function DatastoreList() {
                       )}
                     </div>
                   ))}
+                  
+                  {field.customWhereCondition !== undefined && (
+                    <div className="custom-where-container">
+                      <div className="custom-where-header">
+                        <label className="form-label">Custom Where Condition</label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newFields = [...searchFields];
+                            delete newFields[datastoreIndex].customWhereCondition;
+                            setSearchFields(newFields);
+                          }}
+                          className="remove-custom-where-button"
+                        >
+                          <i className="fas fa-times"></i>
+                        </button>
+                      </div>
+                      <textarea
+                        value={field.customWhereCondition}
+                        onChange={(e) => handleCustomWhereConditionChange(datastoreIndex, e.target.value)}
+                        className="form-input custom-where-input"
+                        placeholder="Enter custom WHERE condition (e.g., status = 'SUCCESS' AND fileType LIKE '%PDF%')"
+                        rows={3}
+                      />
+                      <p className="help-text">
+                        Advanced: Write a custom SQL WHERE condition that will be combined with other filters
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

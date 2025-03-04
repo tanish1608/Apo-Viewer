@@ -7,7 +7,6 @@ import Select from 'react-select';
 import "react-datepicker/dist/react-datepicker.css";
 import '../styles/Sort.css';
 import '../styles/ColumnSelector.css';
-import '../styles/Pagination.css';
 import { mockData } from '../api/mockData';
 import ErrorToast from './ErrorToast';
 
@@ -15,20 +14,27 @@ import ErrorToast from './ErrorToast';
 const ITEMS_PER_PAGE = 50;
 const SEARCH_DEBOUNCE_MS = 300;
 const EXPORT_BATCH_SIZE = 1000;
-const MAX_PAGES_SHOWN = 5;
 
 // Date presets
-const DATE_PRESETS = [
-  { label: 'Today', value: 'today' },
-  { label: 'Yesterday', value: 'yesterday' },
-  { label: 'Last 7 days', value: '7days' },
-  { label: 'Last 30 days', value: '30days' },
-  { label: 'Custom', value: 'custom' }
-];
+// const DATE_PRESETS = [
+//   { label: 'Today', value: 'today' },
+//   { label: 'Yesterday', value: 'yesterday' },
+//   { label: 'Last 7 days', value: '7days' },
+//   { label: 'Last 30 days', value: '30days' },
+//   { label: 'Custom', value: 'custom' }
+// ];
+
+// Helper function to format column headers - moved to the top level
+const formatColumnHeader = (column) => {
+  return column
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^./, str => str.toUpperCase())
+    .trim();
+};
 
 function DatastoreDetail() {
   // Refs for optimization
-  const searchDebounceTimer = useRef(null);
+  // const searchDebounceTimer = useRef(null);
   const tableRef = useRef(null);
   const sortMenuRef = useRef(null);
   const columnSelectorRef = useRef(null);
@@ -46,9 +52,10 @@ function DatastoreDetail() {
   const [columns, setColumns] = useState([]);
   const [visibleColumns, setVisibleColumns] = useState([]);
   const [columnOrder, setColumnOrder] = useState([]); 
-  const [error, setError] = useState(null);
+  const [setError] = useState(null);
   const [errors, setErrors] = useState([]);
   const [searchInput, setSearchInput] = useState('');
+  const [columnSearchInput, setColumnSearchInput] = useState('');
   const [sortConfig, setSortConfig] = useState({
     field: '',
     direction: 'desc'
@@ -65,12 +72,6 @@ function DatastoreDetail() {
     clientName: '',
     search: ''
   });
-  const [totalCount, setTotalCount] = useState(0);
-  const [hasMoreData, setHasMoreData] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [pageSize, setPageSize] = useState(ITEMS_PER_PAGE);
-  const [currentBatch, setCurrentBatch] = useState(1);
-  const [allBatches, setAllBatches] = useState([]);
 
   // Helper functions
   const addError = useCallback((error) => {
@@ -140,38 +141,6 @@ function DatastoreDetail() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  // Generate mock data for testing pagination
-  const generateMockData = useCallback((count = 10000) => {
-    const mockFiles = [];
-    const statuses = ['SUCCESS', 'FAILED', 'PROCESSING', 'WARNING'];
-    const fileTypes = ['PDF_REPORT', 'EXCEL_REPORT', 'TRANSACTION_LOG', 'AUDIT_LOG', 'PAYMENT', 'BATCH_PAYMENT'];
-    const directions = ['INBOUND', 'OUTBOUND', 'INTERNAL'];
-    const clientNames = ['HSBC_REPORTING', 'HSBC_ANALYTICS', 'HSBC_COMPLIANCE', 'HSBC_SECURITY', 'HSBC_PAYMENTS', 'HSBC_BATCH_PAYMENTS', 'HSBC_MONITOR', 'HSBC_ACCESS'];
-    
-    for (let i = 0; i < count; i++) {
-      const date = new Date();
-      date.setDate(date.getDate() - Math.floor(Math.random() * 30));
-      
-      mockFiles.push({
-        fileId: `FILE${i.toString().padStart(6, '0')}`,
-        fileName: `TestFile_${i.toString().padStart(6, '0')}.${Math.random() > 0.5 ? 'pdf' : 'xlsx'}`,
-        fileType: fileTypes[Math.floor(Math.random() * fileTypes.length)],
-        status: statuses[Math.floor(Math.random() * statuses.length)],
-        clientName: clientNames[Math.floor(Math.random() * clientNames.length)],
-        direction: directions[Math.floor(Math.random() * directions.length)],
-        processingEndDate: date.getTime().toString(),
-        datastoreId: id,
-        creationTime: date.getTime(),
-        pageCount: Math.floor(Math.random() * 100),
-        dataPoints: Math.floor(Math.random() * 10000),
-        reportType: Math.random() > 0.5 ? 'DAILY' : (Math.random() > 0.5 ? 'WEEKLY' : 'MONTHLY'),
-        department: Math.random() > 0.5 ? 'FINANCE' : (Math.random() > 0.5 ? 'OPERATIONS' : 'COMPLIANCE')
-      });
-    }
-    
-    return mockFiles;
-  }, [id]);
-
   // Data fetching
   useEffect(() => {
     let mounted = true;
@@ -186,17 +155,8 @@ function DatastoreDetail() {
         let data;
         
         if (id.toLowerCase().includes('mock')) {
-          // Generate large mock dataset for testing pagination
-          const mockFiles = generateMockData(10000);
-          data = { 
-            element: mockFiles,
-            hasMore: true,
-            superCount: mockFiles.length,
-            type: "mock"
-          };
-        } else if (id.toLowerCase().includes('test')) {
           const mockDatastore = Object.values(mockData).find(store => 
-            store.datastoreId.toLowerCase().includes('test') ||
+            store.datastoreId.toLowerCase().includes('mock') ||
             store.datastoreId === id
           );
           
@@ -231,16 +191,6 @@ function DatastoreDetail() {
         }
 
         setFiles(data.element);
-        setTotalCount(data.superCount || data.element.length);
-        setHasMoreData(data.hasMore || false);
-        
-        // Split data into batches for efficient rendering
-        const batchSize = 1000;
-        const batches = [];
-        for (let i = 0; i < data.element.length; i += batchSize) {
-          batches.push(data.element.slice(i, i + batchSize));
-        }
-        setAllBatches(batches);
         
         if (mounted && data.element.length > 0) {
           const columnMap = new Map();
@@ -285,7 +235,7 @@ function DatastoreDetail() {
     return () => {
       mounted = false;
     };
-  }, [id, generateMockData]);
+  }, [id, setError]);
 
   // Handlers
   const handleSort = useCallback((field) => {
@@ -331,6 +281,17 @@ function DatastoreDetail() {
     const parts = datastoreId.split('.');
     return parts[parts.length - 1];
   }, []);
+
+  // Filtered columns based on search
+  const filteredColumns = useMemo(() => {
+    if (!columnSearchInput.trim()) {
+      return columns;
+    }
+    const searchTerm = columnSearchInput.toLowerCase();
+    return columns.filter(column => 
+      formatColumnHeader(column).toLowerCase().includes(searchTerm)
+    );
+  }, [columns, columnSearchInput]);
 
   // Filtered and sorted data
   const filteredFiles = useMemo(() => {
@@ -443,42 +404,28 @@ function DatastoreDetail() {
   }, [filteredFiles, visibleColumns, id, getDatastoreName, addError]);
 
   const downloadCSV = useCallback(() => {
-    try {
-      setExportLoading(true);
-      
-      if (filteredFiles.length === 0) {
-        addError('No data available to export');
-        return;
-      }
-      
-      const csvContent = [
-        visibleColumns.map(column => formatColumnHeader(column)).join(','),
-        ...filteredFiles.map(file => 
-          visibleColumns.map(column => {
-            const value = file[column] || '';
-            return typeof value === 'string' && value.includes(',') 
-              ? `"${value}"` 
-              : value;
-          }).join(',')
-        )
-      ].join('\n');
+    const csvContent = [
+      visibleColumns.map(column => formatColumnHeader(column)).join(','),
+      ...files.map(file => 
+        visibleColumns.map(column => {
+          const value = file[column] || '';
+          return typeof value === 'string' && value.includes(',') 
+            ? `"${value}"` 
+            : value;
+        }).join(',')
+      )
+    ].join('\n');
 
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `${getDatastoreName(id)}_export.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Export failed:', error);
-      addError('Failed to export data. Please try again.');
-    } finally {
-      setExportLoading(false);
-    }
-  }, [filteredFiles, visibleColumns, id, getDatastoreName, addError]);
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${getDatastoreName(id)}_export.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [files, visibleColumns, id, getDatastoreName]);
 
   // Loading state
   if (loading) {
@@ -491,13 +438,6 @@ function DatastoreDetail() {
       </div>
     );
   }
-
-  const formatColumnHeader = (column) => {
-    return column
-      .replace(/([A-Z])/g, ' $1')
-      .replace(/^./, str => str.toUpperCase())
-      .trim();
-  };
 
   const handleFilterChange = (filterType, value) => {
     setFilters(prev => ({
@@ -521,6 +461,10 @@ function DatastoreDetail() {
 
   const handleSearchChange = (e) => {
     setSearchInput(e.target.value);
+  };
+
+  const handleColumnSearchChange = (e) => {
+    setColumnSearchInput(e.target.value);
   };
 
   const handleDatePresetChange = (preset) => {
@@ -582,60 +526,10 @@ function DatastoreDetail() {
     }));
   };
 
-  const handlePageSizeChange = (e) => {
-    const newSize = parseInt(e.target.value, 10);
-    setPageSize(newSize);
-    setCurrentPage(1);
-  };
-
-  const totalPages = Math.ceil(filteredFiles.length / pageSize);
+  const totalPages = Math.ceil(filteredFiles.length / ITEMS_PER_PAGE);
   const visibleRange = {
-    start: (currentPage - 1) * pageSize,
-    end: currentPage * pageSize
-  };
-
-  // Generate page numbers for pagination
-  const getPageNumbers = () => {
-    const pages = [];
-    
-    if (totalPages <= MAX_PAGES_SHOWN) {
-      // Show all pages if there are fewer than MAX_PAGES_SHOWN
-      for (let i = 1; i <= totalPages; i++) {
-        pages.push(i);
-      }
-    } else {
-      // Always show first page
-      pages.push(1);
-      
-      // Calculate start and end of middle pages
-      let startPage = Math.max(2, currentPage - Math.floor(MAX_PAGES_SHOWN / 2));
-      let endPage = Math.min(totalPages - 1, startPage + MAX_PAGES_SHOWN - 3);
-      
-      // Adjust if we're near the end
-      if (endPage === totalPages - 1) {
-        startPage = Math.max(2, endPage - (MAX_PAGES_SHOWN - 3));
-      }
-      
-      // Add ellipsis after first page if needed
-      if (startPage > 2) {
-        pages.push('...');
-      }
-      
-      // Add middle pages
-      for (let i = startPage; i <= endPage; i++) {
-        pages.push(i);
-      }
-      
-      // Add ellipsis before last page if needed
-      if (endPage < totalPages - 1) {
-        pages.push('...');
-      }
-      
-      // Always show last page
-      pages.push(totalPages);
-    }
-    
-    return pages;
+    start: (currentPage - 1) * ITEMS_PER_PAGE,
+    end: currentPage * ITEMS_PER_PAGE
   };
 
   const FilterSection = ({ title, options, selectedValues, onChange }) => {
@@ -724,17 +618,6 @@ function DatastoreDetail() {
               <div className="filters-container">
                 <div className="filter-section">
                   <h3 className="filter-title">Date Range</h3>
-                  <div className="date-presets">
-                    {DATE_PRESETS.map(preset => (
-                      <button
-                        key={preset.value}
-                        className={`date-preset-button ${filters.dateRange.preset === preset.value ? 'active' : ''}`}
-                        onClick={() => handleDatePresetChange(preset.value)}
-                      >
-                        {preset.label}
-                      </button>
-                    ))}
-                  </div>
                   <div className="date-picker-container">
                     <div className="date-picker-wrapper">
                       <i className="fas fa-calendar date-picker-icon"></i>
@@ -879,7 +762,16 @@ function DatastoreDetail() {
                     {visibleColumns.length === columns.length ? 'Hide All' : 'Show All'}
                   </button>
                 </div>
-                {columns.map(column => (
+                <div className="column-search-container">
+                  <input
+                    type="text"
+                    placeholder="Search columns..."
+                    value={columnSearchInput}
+                    onChange={handleColumnSearchChange}
+                    className="column-search-input"
+                  />
+                </div>
+                {filteredColumns.map(column => (
                   <div
                     key={column}
                     className="column-option"
@@ -948,81 +840,41 @@ function DatastoreDetail() {
       </div>
 
       <div className="pagination-container">
-        <div className="pagination-controls-wrapper">
-          <div className="pagination-info">
-            Showing <span>{visibleRange.start + 1}</span> to{' '}
-            <span>{Math.min(visibleRange.end, filteredFiles.length)}</span>{' '}
-            of <span>{filteredFiles.length}</span> results
-          </div>
+        <div className="pagination-info">
+          Showing <span>{visibleRange.start + 1}</span> to{' '}
+          <span>{Math.min(visibleRange.end, filteredFiles.length)}</span>{' '}
+          of <span>{filteredFiles.length}</span> results
+        </div>
+        <div className="pagination-controls">
+          <button
+            onClick={() => setCurrentPage(prev => prev - 1)}
+            disabled={currentPage === 1}
+            className="pagination-button"
+          >
+            <i className="fas fa-chevron-left"></i>
+            Previous
+          </button>
           
-          <div className="pagination-size-selector">
-            <label htmlFor="page-size">Rows per page:</label>
-            <select 
-              id="page-size" 
-              value={pageSize} 
-              onChange={handlePageSizeChange}
-              className="page-size-select"
-            >
-              <option value="10">10</option>
-              <option value="25">25</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
-            </select>
+          <div className="pagination-numbers">
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+              <button
+                key={page}
+                onClick={() => setCurrentPage(page)}
+                className={`page-number ${currentPage === page ? 'active' : ''}`}
+              >
+                {page}
+              </button>
+            ))}
           </div>
-          
-          <div className="pagination-controls">
-            <button
-              onClick={() => setCurrentPage(1)}
-              disabled={currentPage === 1}
-              className="pagination-button first-page"
-              title="First Page"
-            >
-              <i className="fas fa-angle-double-left"></i>
-            </button>
-            
-            <button
-              onClick={() => setCurrentPage(prev => prev - 1)}
-              disabled={currentPage === 1}
-              className="pagination-button prev-page"
-              title="Previous Page"
-            >
-              <i className="fas fa-angle-left"></i>
-            </button>
-            
-            <div className="pagination-numbers">
-              {getPageNumbers().map((page, index) => (
-                page === '...' ? (
-                  <span key={`ellipsis-${index}`} className="pagination-ellipsis">...</span>
-                ) : (
-                  <button
-                    key={page}
-                    onClick={() => setCurrentPage(page)}
-                    className={`page-number ${currentPage === page ? 'active' : ''}`}
-                  >
-                    {page}
-                  </button>
-                )
-              ))}
-            </div>
 
-            <button
-              onClick={() => setCurrentPage(prev => prev + 1)}
-              disabled={currentPage === totalPages || totalPages === 0}
-              className="pagination-button next-page"
-              title="Next Page"
-            >
-              <i className="fas fa-angle-right"></i>
-            </button>
-            
-            <button
-              onClick={() => setCurrentPage(totalPages)}
-              disabled={currentPage === totalPages || totalPages === 0}
-              className="pagination-button last-page"
-              title="Last Page"
-            >
-              <i className="fas fa-angle-double-right"></i>
-            </button>
-          </div>
+          <button
+            onClick={() => setCurrentPage(prev => prev + 1)}
+            disabled={currentPage === totalPages}
+            className="pagination-button"
+          >
+            Next
+            <i className="fas fa-chevron-right"></i>
+          </button>
         </div>
       </div>
     </div>

@@ -39,18 +39,77 @@ const HelpPanel = ({ isOpen, onClose }) => {
           </p>
           <ul>
             <li>
-              <strong>Datastore ID:</strong> Enter one or multiple datastore IDs separated by commas
-              (e.g., HSBCUserAction, HSBCTestActivity)
+              <strong>Datastore ID:</strong> Select from common datastores or type your own custom ID.
+              Multiple datastores can be selected.
             </li>
             <li>
-              <strong>Where Clause:</strong> Optional filter condition
-              (e.g., status='SUCCESS' AND fileType='PDF')
-            </li>
-            <li>
-              <strong>Sort By:</strong> Optional sorting criteria
-              (e.g., creationTime DESC)
+              <strong>Date & Time Range:</strong> Filter files by creation time using a date and time range.
+              The times are converted to Unix timestamps for querying.
             </li>
           </ul>
+        </section>
+
+        <section>
+          <h3>Filtering Options</h3>
+          <p>
+            The application provides several ways to filter your data:
+          </p>
+          
+          <h4>Structured Filters</h4>
+          <p>
+            Create filters using field, condition, and value combinations:
+          </p>
+          <ul>
+            <li><strong>Field:</strong> Select which field to filter on (Status, File Type, File UUID, etc.)</li>
+            <li><strong>Condition:</strong> Choose a comparison operator (=, !=, LIKE, etc.)</li>
+            <li><strong>Value:</strong> Enter the value to compare against</li>
+          </ul>
+          
+          <h4>Filter Examples:</h4>
+          <div className="example-box">
+            <p><strong>Example 1:</strong> Find all successful files</p>
+            <ul>
+              <li>Field: Status</li>
+              <li>Condition: Equals (=)</li>
+              <li>Value: SUCCESS</li>
+            </ul>
+          </div>
+          
+          <div className="example-box">
+            <p><strong>Example 2:</strong> Find files containing "PDF" in the file type</p>
+            <ul>
+              <li>Field: File Type</li>
+              <li>Condition: Contains (LIKE)</li>
+              <li>Value: PDF</li>
+            </ul>
+          </div>
+          
+          <div className="example-box">
+            <p><strong>Example 3:</strong> Find files from a specific client</p>
+            <ul>
+              <li>Field: Client Name</li>
+              <li>Condition: Equals (=)</li>
+              <li>Value: HSBC_LOCALISATION_TESTING</li>
+            </ul>
+          </div>
+          
+          <h4>Custom Where Conditions</h4>
+          <p>
+            For advanced filtering, you can write custom SQL WHERE conditions:
+          </p>
+          <div className="example-box">
+            <p><strong>Example:</strong> Find files that are either SUCCESS status or have PDF in the file type</p>
+            <pre>status = 'SUCCESS' OR fileType LIKE '%PDF%'</pre>
+          </div>
+          
+          <div className="example-box">
+            <p><strong>Example:</strong> Find files with specific client and direction</p>
+            <pre>clientName = 'HSBC_TEST' AND direction = 'OUTBOUND'</pre>
+          </div>
+          
+          <p className="note">
+            Note: Custom WHERE conditions are combined with other filters using AND logic.
+          </p>
         </section>
 
         <section>
@@ -69,10 +128,11 @@ const HelpPanel = ({ isOpen, onClose }) => {
         <section>
           <h3>Tips & Tricks</h3>
           <ul>
-            <li>Use comma-separated IDs to view multiple datastores at once</li>
-            <li>Combine where clauses for precise filtering</li>
+            <li>Use multiple datastores to view combined results</li>
+            <li>Combine structured filters with custom WHERE conditions for precise filtering</li>
+            <li>Use date/time ranges to narrow down results by creation time</li>
             <li>Export large datasets in batches for better performance</li>
-            <li>Use the column selector to customize your view</li>
+            <li>Use the column selector in the results view to customize your display</li>
           </ul>
         </section>
       </div>

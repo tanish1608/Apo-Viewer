@@ -312,7 +312,13 @@ select.form-input:focus {
   margin-bottom: 12px;
 }
 
-.add-filter-button {
+.filter-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.add-filter-button,
+.add-custom-where-button {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -326,13 +332,19 @@ select.form-input:focus {
   transition: all 0.2s ease;
 }
 
-.add-filter-button:hover {
+.add-filter-button:hover,
+.add-custom-where-button:hover {
   background: #f8fafc;
   border-color: #cbd5e1;
 }
 
-.add-filter-button i {
+.add-filter-button i,
+.add-custom-where-button i {
   font-size: 10px;
+}
+
+.add-custom-where-button {
+  background: #f8fafc;
 }
 
 .filter-row {
@@ -368,6 +380,47 @@ select.form-input:focus {
   background: #fef2f2;
 }
 
+/* Custom Where Condition Styles */
+.custom-where-container {
+  margin-top: 16px;
+  padding: 12px;
+  background: #f1f5f9;
+  border-radius: 8px;
+  border: 1px dashed #cbd5e1;
+}
+
+.custom-where-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.custom-where-input {
+  font-family: monospace;
+  resize: vertical;
+  min-height: 80px;
+}
+
+.remove-custom-where-button {
+  background: none;
+  border: none;
+  color: #ef4444;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.remove-custom-where-button:hover {
+  background: #fef2f2;
+}
+
 /* Date Range Picker Styles */
 .date-range-picker {
   width: 100%;
@@ -385,6 +438,79 @@ select.form-input:focus {
 
 .rs-picker-toggle-caret {
   top: 8px !important;
+}
+
+/* Datastore Select Styles */
+.datastore-select {
+  font-size: 13px;
+}
+
+.datastore-select__control {
+  min-height: 36px;
+  border-color: #e2e8f0;
+  box-shadow: none;
+}
+
+.datastore-select__control:hover {
+  border-color: #cbd5e1;
+}
+
+.datastore-select__control--is-focused {
+  border-color: var(--hsbc-red) !important;
+  box-shadow: 0 0 0 1px var(--hsbc-red) !important;
+}
+
+.datastore-select__placeholder {
+  color: #94a3b8;
+}
+
+.datastore-select__indicator-separator {
+  background-color: #e2e8f0;
+}
+
+.datastore-select__dropdown-indicator {
+  color: #64748b;
+}
+
+.datastore-select__menu {
+  z-index: 100;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.datastore-select__option {
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.datastore-select__option--is-focused {
+  background-color: #f1f5f9;
+}
+
+.datastore-select__option--is-selected {
+  background-color: var(--hsbc-red);
+  color: white;
+}
+
+.datastore-select__multi-value {
+  background-color: #f1f5f9;
+  border-radius: 4px;
+}
+
+.datastore-select__multi-value__label {
+  font-size: 12px;
+  color: #334155;
+  padding: 2px 6px;
+}
+
+.datastore-select__multi-value__remove {
+  color: #64748b;
+  padding: 0 4px;
+}
+
+.datastore-select__multi-value__remove:hover {
+  background-color: var(--hsbc-red);
+  color: white;
 }
 
 /* Responsive Design */
@@ -433,5 +559,10 @@ select.form-input:focus {
 
   .remove-filter-button {
     justify-self: flex-end;
+  }
+  
+  .filter-buttons {
+    flex-direction: column;
+    gap: 8px;
   }
 }
