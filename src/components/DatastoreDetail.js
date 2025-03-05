@@ -14,6 +14,8 @@ import ErrorToast from './ErrorToast';
 const ITEMS_PER_PAGE = 50;
 const SEARCH_DEBOUNCE_MS = 300;
 const EXPORT_BATCH_SIZE = 1000;
+const DEFAULT_SORT_FIELD = 'creationTime';
+const DEFAULT_SORT_DIRECTION = 'desc';
 
 // Date presets
 const DATE_PRESETS = [
@@ -24,7 +26,7 @@ const DATE_PRESETS = [
   { label: 'Custom', value: 'custom' }
 ];
 
-// Helper function to format column headers - moved to the top level
+// Helper function to format column headers
 const formatColumnHeader = (column) => {
   return column
     .replace(/([A-Z])/g, ' $1')
@@ -57,8 +59,8 @@ function DatastoreDetail() {
   const [searchInput, setSearchInput] = useState('');
   const [columnSearchInput, setColumnSearchInput] = useState('');
   const [sortConfig, setSortConfig] = useState({
-    field: '',
-    direction: 'desc'
+    field: DEFAULT_SORT_FIELD,
+    direction: DEFAULT_SORT_DIRECTION
   });
   const [filters, setFilters] = useState({
     dateRange: {
@@ -172,11 +174,15 @@ function DatastoreDetail() {
         } else {
           const searchParams = new URLSearchParams(window.location.search);
           const where = searchParams.get('where');
-          const sortBy = searchParams.get('sortBy');
+          const sortBy = `${DEFAULT_SORT_FIELD} ${DEFAULT_SORT_DIRECTION}`;
+          const fromRows = ((currentPage - 1) * ITEMS_PER_PAGE).toString();
+          const rows = ITEMS_PER_PAGE.toString();
           
           const queryParams = new URLSearchParams();
           if (where) queryParams.append('where', where);
-          if (sortBy) queryParams.append('sortBy', sortBy);
+          queryParams.append('sortBy', sortBy);
+          queryParams.append('fromRows', fromRows);
+          queryParams.append('rows', rows);
           
           data = await fetchDatastoreFiles(
             decodeURIComponent(id),
@@ -235,14 +241,14 @@ function DatastoreDetail() {
     return () => {
       mounted = false;
     };
-  }, [id]);
+  }, [id, currentPage]);
 
   // Handlers
   const handleSort = useCallback((field) => {
     if (field === 'clear') {
       setSortConfig({
-        field: 'creationTime',
-        direction: 'desc'
+        field: DEFAULT_SORT_FIELD,
+        direction: DEFAULT_SORT_DIRECTION
       });
     } else {
       setSortConfig(prev => ({

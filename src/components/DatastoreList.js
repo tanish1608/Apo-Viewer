@@ -3,19 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import HelpPanel from './HelpPanel';
 import { DateRangePicker } from 'rsuite';
-// import Select from 'react-select';
+import Select from 'react-select';
 import CreatableSelect from 'react-select/creatable';
 import 'rsuite/dist/rsuite.min.css';
 import '../styles/DatastoreList.css';
 
-// Environment configurations
 const ENV_CONFIGS = {
   env1: 'https://api-env1.example.com',
   env2: 'https://api-env2.example.com',
   env3: 'https://api-env3.example.com'
 };
 
-// Default datastore options
 const DEFAULT_DATASTORES = [
   { value: 'com.seeburger.sil.hsbc.HSBCUserAction', label: 'HSBCUserAction' },
   { value: 'com.seeburger.sil.hsbc.HSBCTestActivity', label: 'HSBCTestActivity' },
@@ -25,7 +23,6 @@ const DEFAULT_DATASTORES = [
   { value: 'com.seeburger.sil.hsbc.ReportGenerator', label: 'ReportGenerator' }
 ];
 
-// Filter field options
 const FILTER_FIELDS = [
   { value: 'status', label: 'Status' },
   { value: 'fileType', label: 'File Type' },
@@ -35,7 +32,6 @@ const FILTER_FIELDS = [
   { value: 'direction', label: 'Direction' }
 ];
 
-// Condition options
 const CONDITION_OPTIONS = [
   { value: '=', label: 'Equals (=)' },
   { value: '!=', label: 'Not Equals (!=)' },
@@ -91,13 +87,11 @@ function DatastoreList() {
     const newFields = [...searchFields];
     if (selectedOption) {
       if (Array.isArray(selectedOption)) {
-        // For multi-select
         newFields[index] = { 
           ...newFields[index], 
           datastoreId: selectedOption.map(option => option.value).join(',') 
         };
       } else {
-        // For single select
         newFields[index] = { 
           ...newFields[index], 
           datastoreId: selectedOption.value 
@@ -145,14 +139,12 @@ function DatastoreList() {
 
   const convertToUnixTimestamp = (date) => {
     if (!date) return null;
-    // Convert to UTC then to Unix timestamp in milliseconds
     return Math.floor(new Date(date).getTime());
   };
 
   const buildWhereClause = (filters, dateRange, customWhereCondition) => {
     const conditions = [];
     
-    // Add filter conditions
     filters.forEach(filter => {
       if (filter.field && filter.condition && filter.value) {
         if (filter.condition === 'LIKE' || filter.condition === 'NOT LIKE') {
@@ -163,8 +155,6 @@ function DatastoreList() {
       }
     });
     
-    // Add date range condition if present
-    // Safely check if dateRange is an array and has valid start and end dates
     if (Array.isArray(dateRange) && dateRange.length === 2 && dateRange[0] && dateRange[1]) {
       const startDate = convertToUnixTimestamp(dateRange[0]);
       const endDate = convertToUnixTimestamp(dateRange[1]);
@@ -173,7 +163,6 @@ function DatastoreList() {
       }
     }
     
-    // Add custom where condition if present
     if (customWhereCondition && customWhereCondition.trim()) {
       conditions.push(`(${customWhereCondition.trim()})`);
     }
@@ -211,14 +200,12 @@ function DatastoreList() {
     navigate(`/datastore/${datastoreIds}${queryString ? `?${queryString}` : ''}`);
   };
 
-  // Get current datastore value as a Select option
   const getDatastoreSelectValue = (index) => {
     const datastoreId = searchFields[index].datastoreId;
     if (!datastoreId) return null;
     
     const ids = datastoreId.split(',').map(id => id.trim());
     
-    // Check if the value exists in our default options
     const options = ids.map(id => {
       const existingOption = DEFAULT_DATASTORES.find(option => option.value === id);
       return existingOption || { value: id, label: id.split('.').pop() };
@@ -230,17 +217,27 @@ function DatastoreList() {
   return (
     <div className="container">
       <div className="header">
-        <h1>Datastore Viewer</h1>
+        <div className="header-left">
+          <div className="logo">
+            <i className="fas fa-database"></i>
+          </div>
+          <div className="header-titles">
+            <h1 className="header-title">Datastore Viewer</h1>
+            <p className="header-subtitle">View and manage your datastore files</p>
+          </div>
+        </div>
         <div className="user-section">
+          <span className="username">
+            <i className="fas fa-user-circle"></i>
+            {user?.username}
+          </span>
           <button 
             onClick={() => setShowHelp(!showHelp)} 
             className="help-button"
-            title="Show Help"
           >
             <i className="fas fa-question-circle"></i>
             Help
           </button>
-          <span className="username">{user?.username}</span>
           <button onClick={logout} className="logout-button">
             <i className="fas fa-sign-out-alt"></i>
             Logout
@@ -252,9 +249,15 @@ function DatastoreList() {
         <HelpPanel isOpen={showHelp} onClose={() => setShowHelp(false)} />
         
         <div className="search-form-container">
+          <div className="search-form-header">
+            <h2 className="search-form-title">Configure Datastores</h2>
+            <p className="search-form-description">Select datastores and apply filters to view files</p>
+          </div>
+
           <form onSubmit={handleSubmit}>
             {error && (
               <div className="error-message">
+                <i className="fas fa-exclamation-circle"></i>
                 {error}
               </div>
             )}
@@ -262,7 +265,7 @@ function DatastoreList() {
             <div className="api-url-box">
               <div className="form-group">
                 <label htmlFor="environment" className="form-label">
-                  Environment <span className="required">*</span>
+                  Environment<span className="required">*</span>
                 </label>
                 <select
                   id="environment"
@@ -274,189 +277,206 @@ function DatastoreList() {
                   <option value="env2">Environment 2</option>
                   <option value="env3">Environment 3</option>
                 </select>
+                <p className="help-text">
+                  <i className="fas fa-info-circle"></i>
+                  Select the environment to connect to
+                </p>
               </div>
             </div>
             
-            {searchFields.map((field, datastoreIndex) => (
-              <div key={datastoreIndex} className="datastore-box">
-                <div className="datastore-header">
-                  <h3 className="datastore-title">Datastore {datastoreIndex + 1}</h3>
-                  {searchFields.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveDatastore(datastoreIndex)}
-                      className="remove-button"
-                    >
-                      <i className="fas fa-times"></i>
-                      Remove
-                    </button>
-                  )}
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor={`datastoreId-${datastoreIndex}`} className="form-label">
-                    Datastore ID <span className="required">*</span>
-                  </label>
-                  <CreatableSelect
-                    id={`datastoreId-${datastoreIndex}`}
-                    value={getDatastoreSelectValue(datastoreIndex)}
-                    onChange={(selectedOption) => handleDatastoreIdChange(datastoreIndex, selectedOption)}
-                    options={DEFAULT_DATASTORES}
-                    className="datastore-select"
-                    classNamePrefix="datastore-select"
-                    placeholder="Select or type datastore ID..."
-                    isMulti
-                    isClearable
-                    isSearchable
-                    formatCreateLabel={(inputValue) => `Use "${inputValue}"`}
-                    createOptionPosition="first"
-                  />
-                  <p className="help-text">
-                    Select from common datastores or type your own. Multiple datastores can be selected.
-                  </p>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Date & Time Range</label>
-                  <DateRangePicker 
-                    className="date-range-picker"
-                    value={field.dateRange}
-                    onChange={(value) => handleDateRangeChange(datastoreIndex, value)}
-                    placeholder="Select date and time range"
-                    format="yyyy-MM-dd HH:mm:ss"
-                    block
-                    showMeridian
-                  />
-                  <p className="help-text">
-                    Times are converted to GMT and Unix timestamps for querying creationTime
-                  </p>
-                </div>
-
-                <div className="filters-section">
-                  <div className="filters-header">
-                    <label className="form-label">Filters</label>
-                    <div className="filter-buttons">
+            <div className="datastore-boxes-container">
+              {searchFields.map((field, datastoreIndex) => (
+                <div key={datastoreIndex} className="datastore-box">
+                  <div className="datastore-header">
+                    <h3 className="datastore-title">
+                      <i className="fas fa-database"></i>
+                      Datastore {datastoreIndex + 1}
+                    </h3>
+                    {searchFields.length > 1 && (
                       <button
                         type="button"
-                        onClick={() => handleAddFilter(datastoreIndex)}
-                        className="add-filter-button"
+                        onClick={() => handleRemoveDatastore(datastoreIndex)}
+                        className="remove-button"
                       >
-                        <i className="fas fa-plus"></i>
-                        Add Filter
+                        <i className="fas fa-times"></i>
+                        Remove
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const newFields = [...searchFields];
-                          newFields[datastoreIndex].customWhereCondition = newFields[datastoreIndex].customWhereCondition || '';
-                          setSearchFields(newFields);
-                        }}
-                        className="add-custom-where-button"
-                      >
-                        <i className="fas fa-code"></i>
-                        Custom Where
-                      </button>
-                    </div>
+                    )}
                   </div>
-                  
-                  {field.filters.map((filter, filterIndex) => (
-                    <div key={filterIndex} className="filter-row">
-                      <div className="filter-field">
-                        <select
-                          value={filter.field}
-                          onChange={(e) => handleFilterChange(datastoreIndex, filterIndex, 'field', e.target.value)}
-                          className="form-input"
-                        >
-                          {FILTER_FIELDS.map(option => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      
-                      <div className="filter-condition">
-                        <select
-                          value={filter.condition}
-                          onChange={(e) => handleFilterChange(datastoreIndex, filterIndex, 'condition', e.target.value)}
-                          className="form-input"
-                        >
-                          {CONDITION_OPTIONS.map(option => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      
-                      <div className="filter-value">
-                        <input
-                          type="text"
-                          value={filter.value}
-                          onChange={(e) => handleFilterChange(datastoreIndex, filterIndex, 'value', e.target.value)}
-                          className="form-input"
-                          placeholder="Enter value"
-                        />
-                      </div>
-                      
-                      {field.filters.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveFilter(datastoreIndex, filterIndex)}
-                          className="remove-filter-button"
-                        >
-                          <i className="fas fa-times"></i>
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  
-                  {field.customWhereCondition !== undefined && (
-                    <div className="custom-where-container">
-                      <div className="custom-where-header">
-                        <label className="form-label">Custom Where Condition</label>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const newFields = [...searchFields];
-                            delete newFields[datastoreIndex].customWhereCondition;
-                            setSearchFields(newFields);
-                          }}
-                          className="remove-custom-where-button"
-                        >
-                          <i className="fas fa-times"></i>
-                        </button>
-                      </div>
-                      <textarea
-                        value={field.customWhereCondition}
-                        onChange={(e) => handleCustomWhereConditionChange(datastoreIndex, e.target.value)}
-                        className="form-input custom-where-input"
-                        placeholder="Enter custom WHERE condition (e.g., status = 'SUCCESS' AND fileType LIKE '%PDF%')"
-                        rows={3}
+
+                  <div className="datastore-content">
+                    <div className="form-group">
+                      <label htmlFor={`datastoreId-${datastoreIndex}`} className="form-label">
+                        Datastore ID<span className="required">*</span>
+                      </label>
+                      <CreatableSelect
+                        id={`datastoreId-${datastoreIndex}`}
+                        value={getDatastoreSelectValue(datastoreIndex)}
+                        onChange={(selectedOption) => handleDatastoreIdChange(datastoreIndex, selectedOption)}
+                        options={DEFAULT_DATASTORES}
+                        className="datastore-select"
+                        classNamePrefix="datastore-select"
+                        placeholder="Select or type datastore ID..."
+                        isMulti
+                        isClearable
+                        isSearchable
+                        formatCreateLabel={(inputValue) => `Use "${inputValue}"`}
+                        createOptionPosition="first"
                       />
                       <p className="help-text">
-                        Advanced: Write a custom SQL WHERE condition that will be combined with other filters
+                        <i className="fas fa-info-circle"></i>
+                        Select from common datastores or type your own
                       </p>
                     </div>
-                  )}
+
+                    <div className="form-group">
+                      <label className="form-label">Date & Time Range</label>
+                      <DateRangePicker 
+                        className="date-range-picker"
+                        value={field.dateRange}
+                        onChange={(value) => handleDateRangeChange(datastoreIndex, value)}
+                        placeholder="Select date and time range"
+                        format="yyyy-MM-dd HH:mm:ss"
+                        block
+                        showMeridian
+                      />
+                      <p className="help-text">
+                        <i className="fas fa-info-circle"></i>
+                        Times are converted to GMT and Unix timestamps for querying
+                      </p>
+                    </div>
+
+                    <div className="filters-section">
+                      <div className="filters-header">
+                        <label className="form-label">Filters</label>
+                        <div className="filter-buttons">
+                          <button
+                            type="button"
+                            onClick={() => handleAddFilter(datastoreIndex)}
+                            className="add-filter-button"
+                          >
+                            <i className="fas fa-plus"></i>
+                            Add Filter
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newFields = [...searchFields];
+                              newFields[datastoreIndex].customWhereCondition = newFields[datastoreIndex].customWhereCondition || '';
+                              setSearchFields(newFields);
+                            }}
+                            className="add-custom-where-button"
+                          >
+                            <i className="fas fa-code"></i>
+                            Custom Where
+                          </button>
+                        </div>
+                      </div>
+                      
+                      {field.filters.map((filter, filterIndex) => (
+                        <div key={filterIndex} className="filter-row">
+                          <div className="filter-field">
+                            <select
+                              value={filter.field}
+                              onChange={(e) => handleFilterChange(datastoreIndex, filterIndex, 'field', e.target.value)}
+                              className="form-input"
+                            >
+                              {FILTER_FIELDS.map(option => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          
+                          <div className="filter-condition">
+                            <select
+                              value={filter.condition}
+                              onChange={(e) => handleFilterChange(datastoreIndex, filterIndex, 'condition', e.target.value)}
+                              className="form-input"
+                            >
+                              {CONDITION_OPTIONS.map(option => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          
+                          <div className="filter-value">
+                            <input
+                              type="text"
+                              value={filter.value}
+                              onChange={(e) => handleFilterChange(datastoreIndex, filterIndex, 'value', e.target.value)}
+                              className="form-input"
+                              placeholder="Enter value"
+                            />
+                          </div>
+                          
+                          {field.filters.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveFilter(datastoreIndex, filterIndex)}
+                              className="remove-filter-button"
+                            >
+                              <i className="fas fa-times"></i>
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      
+                      {field.customWhereCondition !== undefined && (
+                        <div className="custom-where-container">
+                          <div className="custom-where-header">
+                            <label className="form-label">Custom Where Condition</label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newFields = [...searchFields];
+                                delete newFields[datastoreIndex].customWhereCondition;
+                                setSearchFields(newFields);
+                              }}
+                              className="remove-filter-button"
+                            >
+                              <i className="fas fa-times"></i>
+                            </button>
+                          </div>
+                          <textarea
+                            value={field.customWhereCondition}
+                            onChange={(e) => handleCustomWhereConditionChange(datastoreIndex, e.target.value)}
+                            className="form-input custom-where-input"
+                            placeholder="Enter custom WHERE condition (e.g., status = 'SUCCESS' AND fileType LIKE '%PDF%')"
+                            rows={3}
+                          />
+                          <p className="help-text">
+                            <i className="fas fa-info-circle"></i>
+                            Write a custom SQL WHERE condition that will be combined with other filters
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
 
             <div className="button-container">
-              <button
-                type="button"
-                onClick={handleAddDatastore}
-                className="add-datastore-button"
-              >
-                <i className="fas fa-plus"></i>
-                Add Another Datastore
-              </button>
+              <div className="button-group">
+                <button
+                  type="button"
+                  onClick={handleAddDatastore}
+                  className="add-datastore-button"
+                >
+                  <i className="fas fa-plus"></i>
+                  Add Another Datastore
+                </button>
+              </div>
 
               <button
                 type="submit"
                 className="submit-button"
               >
+                <i className="fas fa-search"></i>
                 View Files
               </button>
             </div>

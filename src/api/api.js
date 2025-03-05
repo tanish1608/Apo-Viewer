@@ -27,7 +27,7 @@ const handleApiError = (error) => {
   throw error;
 };
 
-export const fetchDatastoreFiles = async (datastoreIds, queryString = '', page = 1, pageSize = 1000) => {
+export const fetchDatastoreFiles = async (datastoreIds, queryString = '') => {
   try {
     const authData = localStorage.getItem('auth_data');
     if (!authData) {
@@ -39,18 +39,6 @@ export const fetchDatastoreFiles = async (datastoreIds, queryString = '', page =
     
     if (username === 'admin' && password === 'admin123') {
       console.log('Using demo credentials - returning mock files');
-      
-      // Generate large mock dataset for testing pagination
-      if (datastoreIds.toLowerCase().includes('mock')) {
-        const mockFiles = generateLargeMockDataset(10000, datastoreIdArray);
-        return {
-          element: mockFiles,
-          hasMore: true,
-          superCount: mockFiles.length,
-          type: "mock"
-        };
-      }
-      
       const mockFiles = datastoreIdArray.flatMap(id => {
         const datastoreData = mockData[id];
         if (!datastoreData?.files) return [];
@@ -64,16 +52,15 @@ export const fetchDatastoreFiles = async (datastoreIds, queryString = '', page =
       });
 
       return {
-        element: mockFiles.sort((a, b) => (b.creationTime || 0) - (a.creationTime || 0)),
-        hasMore: false,
-        superCount: mockFiles.length,
-        type: "mock"
+        element: mockFiles.sort((a, b) => (b.creationTime || 0) - (a.creationTime || 0))
       };
     }
 
     const searchParams = new URLSearchParams(queryString);
     const whereConditions = {};
     const sortByConditions = {};
+    const fromRows = searchParams.get('fromRows') || '0';
+    const rows = searchParams.get('rows') || '1000';
     
     searchParams.getAll('where').forEach((where, index) => {
       if (index < datastoreIdArray.length) {
@@ -87,25 +74,20 @@ export const fetchDatastoreFiles = async (datastoreIds, queryString = '', page =
       }
     });
 
-    // Add pagination parameters
-    searchParams.append('page', page.toString());
-    searchParams.append('pageSize', pageSize.toString());
-
     const responses = await Promise.all(
       datastoreIdArray.map(async datastoreId => {
         try {
           const params = new URLSearchParams();
           params.append('username', username);
           params.append('password', password);
-          params.append('page', page.toString());
-          params.append('pageSize', pageSize.toString());
-          
           if (whereConditions[datastoreId]) {
             params.append('where', whereConditions[datastoreId]);
           }
           if (sortByConditions[datastoreId]) {
             params.append('sortBy', sortByConditions[datastoreId]);
           }
+          params.append('fromRows', fromRows);
+          params.append('rows', rows);
 
           const response = await fetch(
             `${getApiUrl()}/datastores/${encodeURIComponent(datastoreId)}/files?${params.toString()}`
@@ -129,10 +111,10 @@ export const fetchDatastoreFiles = async (datastoreIds, queryString = '', page =
             };
           }
 
-          return { element: [], hasMore: false, superCount: 0 };
+          return { element: [] };
         } catch (error) {
           console.error(`Failed to fetch files for datastore ${datastoreId}:`, error);
-          return { element: [], hasMore: false, superCount: 0 };
+          return { element: [] };
         }
       })
     );
@@ -140,7 +122,7 @@ export const fetchDatastoreFiles = async (datastoreIds, queryString = '', page =
     const combinedResponse = {
       element: responses.flatMap(response => response.element || []),
       hasMore: responses.some(response => response.hasMore),
-      superCount: responses.reduce(( sum, response) => sum + (response.superCount || 0), 0),
+      superCount: responses.reduce((sum, response) => sum + (response.superCount || 0), 0),
       type: responses[0]?.type || "undefined"
     };
 
@@ -151,44 +133,6 @@ export const fetchDatastoreFiles = async (datastoreIds, queryString = '', page =
     console.error('Failed to fetch datastore files:', error);
     throw handleApiError(error);
   }
-};
-
-// Helper function to generate large mock dataset for testing pagination
-const generateLargeMockDataset = (count = 10000, datastoreIds = ['mock.datastore']) => {
-  const mockFiles = [];
-  const statuses = ['SUCCESS', 'FAILED', 'PROCESSING', 'WARNING'];
-  const fileTypes = ['PDF_REPORT', 'EXCEL_REPORT', 'TRANSACTION_LOG', 'AUDIT_LOG', 'PAYMENT', 'BATCH_PAYMENT'];
-  const directions = ['INBOUND', 'OUTBOUND', 'INTERNAL'];
-  const clientNames = ['HSBC_REPORTING', 'HSBC_ANALYTICS', 'HSBC_COMPLIANCE', 'HSBC_SECURITY', 'HSBC_PAYMENTS', 'HSBC_BATCH_PAYMENTS', 'HSBC_MONITOR', 'HSBC_ACCESS'];
-  
-  for (let i = 0; i < count; i++) {
-    const date = new Date();
-    date.setDate(date.getDate() - Math.floor(Math.random() * 30));
-    const datastoreId = datastoreIds[Math.floor(Math.random() * datastoreIds.length)];
-    
-    mockFiles.push({
-      fileId: `FILE${i.toString().padStart(6, '0')}`,
-      fileName: `TestFile_${i.toString().padStart(6, '0')}.${Math.random() > 0.5 ? 'pdf' : 'xlsx'}`,
-      fileType: fileTypes[Math.floor(Math.random() * fileTypes.length)],
-      status: statuses[Math.floor(Math.random() * statuses.length)],
-      clientName: clientNames[Math.floor(Math.random() * clientNames.length)],
-      direction: directions[Math.floor(Math.random() * directions.length)],
-      processingEndDate: date.getTime().toString(),
-      datastoreId: datastoreId,
-      creationTime: date.getTime(),
-      pageCount: Math.floor(Math.random() * 100),
-      dataPoints: Math.floor(Math.random() * 10000),
-      reportType: Math.random() > 0.5 ? 'DAILY' : (Math.random() > 0.5 ? 'WEEKLY' : 'MONTHLY'),
-      department: Math.random() > 0.5 ? 'FINANCE' : (Math.random() > 0.5 ? 'OPERATIONS' : 'COMPLIANCE')
-    });
-  }
-  
-  return mockFiles;
-};
-
-// Function to fetch paginated data
-export const fetchPaginatedData = async (datastoreIds, queryString = '', page = 1, pageSize = 1000) => {
-  return fetchDatastoreFiles(datastoreIds, queryString, page, pageSize);
 };
 
 export const verifyCredentials = async (username, password) => {

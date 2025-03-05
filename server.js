@@ -2,16 +2,12 @@ const express = require('express');
 const fetch = require('node-fetch');
 const cors = require('cors');
 const https = require('https');
-const CryptoJS = require('crypto-js');
 
 const app = express();
 const PORT = 5000;
 
 // API Base URL
 const BASE_URL = 'https://mt-conn-core-api-dev.hk.hsbc:14100/api/sil/element-dna';
-
-// Encryption key - should match the client's key
-const ENCRYPTION_KEY = process.env.REACT_APP_ENCRYPTION_KEY || 'your-fallback-encryption-key';
 
 // Create an agent that allows self-signed SSL certificates
 const agent = new https.Agent({
@@ -24,29 +20,12 @@ app.use(express.json());
 // Enable CORS for frontend testing
 app.use(cors());
 
-// Function to decrypt auth data
-const decryptAuthData = (encryptedData) => {
-  try {
-    const bytes = CryptoJS.AES.decrypt(encryptedData, ENCRYPTION_KEY);
-    const decryptedData = bytes.toString(CryptoJS.enc.Utf8);
-    return JSON.parse(decryptedData);
-  } catch (error) {
-    console.error('Decryption error:', error);
-    return null;
-  }
-};
-
-// Function to generate Basic Auth headers
-const getBasicAuthHeaders = (username, password) => {
-  const credentials = Buffer.from(`${username}:${password}`).toString('base64');
-  console.log('Using credentials for API call:', { username });
-  
-  return {
-    'Authorization': `Basic ${credentials}`,
-    'Accept': '*/*',
-    'User-Agent': 'datastore-viewer/1.0'
-  };
-};
+// Function to generate Basic Auth header
+const getAuthHeaders = (username, password) => ({
+  'Authorization': 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64'),
+  'Accept': '*/*',
+  'User-Agent': 'datastore-viewer/1.0'
+});
 
 // Function to process chunked responses
 const processChunkedResponse = async (response, res) => {
@@ -55,25 +34,16 @@ const processChunkedResponse = async (response, res) => {
   res.send(rawdata.toString());
 };
 
-// Auth endpoint
-app.post('/auth', (req, res) => {
-  const { encryptedAuth } = req.body;
-  
-  if (!encryptedAuth) {
-    return res.status(400).json({ error: 'Missing auth data' });
+// verifiy the auth data
+app.get('/auth', (req, res) => {
+  const { username, password } = req.query;
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Missing credentials' });
   }
-
-  const authData = decryptAuthData(encryptedAuth);
-  if (!authData || !authData.username || !authData.password) {
-    return res.status(400).json({ error: 'Invalid auth data' });
-  }
-
-  console.log('Authenticating user:', authData.username);
-  
   const apiUrl = `${BASE_URL}/auth`;
   fetch(apiUrl, {
     method: 'GET',
-    headers: getBasicAuthHeaders(authData.username, authData.password),
+    headers: getAuthHeaders(username, password),
     agent
   })
     .then(response => {
@@ -91,18 +61,13 @@ app.post('/auth', (req, res) => {
     });
 });
 
-// Datastore files endpoint
+// Update the datastore files endpoint to handle where, sortBy, fromRows and rows parameters
 app.get('/datastores/:id/files', async (req, res) => {
-  const { encryptedAuth, where, sortBy } = req.query;
+  const { username, password, where, sortBy, fromRows = '0', rows = '1000' } = req.query;
   const { id } = req.params;
 
-  if (!encryptedAuth) {
-    return res.status(400).json({ error: 'Missing auth data' });
-  }
-
-  const authData = decryptAuthData(encryptedAuth);
-  if (!authData || !authData.username || !authData.password) {
-    return res.status(400).json({ error: 'Invalid auth data' });
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Missing credentials' });
   }
 
   try {
@@ -110,12 +75,14 @@ app.get('/datastores/:id/files', async (req, res) => {
     const queryParams = new URLSearchParams();
     if (where) queryParams.append('where', where);
     if (sortBy) queryParams.append('sortBy', sortBy);
+    queryParams.append('fromRows', fromRows);
+    queryParams.append('rows', rows);
     
     const apiUrl = `${BASE_URL}/datastores/${encodeURIComponent(id)}/files${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
     
     const response = await fetch(apiUrl, {
       method: 'GET',
-      headers: getBasicAuthHeaders(authData.username, authData.password),
+      headers: getAuthHeaders(username, password),
       agent
     });
 
