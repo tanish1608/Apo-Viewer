@@ -199,27 +199,44 @@ function DatastoreDetail() {
         setFiles(data.element);
         
         if (mounted && data.element.length > 0) {
+          // Create a map to store all unique columns and their frequencies
           const columnMap = new Map();
-          data.element.slice(0, 100).forEach(file => {
+          
+          // First pass: collect all unique columns and their frequencies
+          data.element.forEach(file => {
             Object.keys(file).forEach(key => {
               columnMap.set(key, (columnMap.get(key) || 0) + 1);
             });
           });
 
-          // Define priority columns
-          const priority = ['fileName', 'fileType', 'status', 'clientName', 'direction', 'clientConnection'];
+          // Define priority columns that should always appear first
+          const priority = [
+            'fileName',
+            'fileType',
+            'status',
+            'clientName',
+            'direction',
+            'clientConnection',
+            'processingEndDate',
+            'creationTime',
+            'fileId'
+          ];
           
-          // Sort columns maintaining priority
+          // Sort columns maintaining priority and including ALL columns
           const sortedColumns = Array.from(columnMap.keys()).sort((a, b) => {
             const aIndex = priority.indexOf(a);
             const bIndex = priority.indexOf(b);
             
+            // If both columns are priority columns, sort by priority order
             if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+            // If only a is a priority column, it comes first
             if (aIndex !== -1) return -1;
+            // If only b is a priority column, it comes first
             if (bIndex !== -1) return 1;
+            // For non-priority columns, sort by frequency (most frequent first)
             return columnMap.get(b) - columnMap.get(a);
           });
-          
+
           setColumns(sortedColumns);
           setColumnOrder(sortedColumns);
           setVisibleColumns(sortedColumns);
@@ -862,7 +879,7 @@ function DatastoreDetail() {
           </button>
           
           <div className="pagination-numbers">
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+            {Array. from({ length: totalPages }, (_, i) => i + 1).map((page) => (
               <button
                 key={page}
                 onClick={() => setCurrentPage(page)}

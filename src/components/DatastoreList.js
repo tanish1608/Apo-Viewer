@@ -63,7 +63,29 @@ function DatastoreList() {
   useEffect(() => {
     localStorage.setItem('selected_env', selectedEnv);
     localStorage.setItem('api_url', ENV_CONFIGS[selectedEnv]);
+
+    // Reset date ranges when switching to env2
+    if (selectedEnv === 'env2') {
+      setSearchFields(prev => prev.map(field => ({
+        ...field,
+        dateRange: [null, null]
+      })));
+    }
   }, [selectedEnv]);
+
+  const getDateRangeConfig = () => {
+    if (selectedEnv === 'env2') {
+      const today = new Date();
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(today.getDate() - 7);
+      
+      return {
+        disabledDate: date => date < sevenDaysAgo || date > today,
+        defaultValue: [sevenDaysAgo, today]
+      };
+    }
+    return {};
+  };
 
   const handleAddDatastore = () => {
     setSearchFields([
@@ -214,6 +236,8 @@ function DatastoreList() {
     return options;
   };
 
+  const dateRangeConfig = getDateRangeConfig();
+
   return (
     <div className="container">
       <div className="header">
@@ -277,10 +301,12 @@ function DatastoreList() {
                   <option value="env2">Environment 2</option>
                   <option value="env3">Environment 3</option>
                 </select>
-                <p className="help-text">
-                  <i className="fas fa-info-circle"></i>
-                  Select the environment to connect to
-                </p>
+                {selectedEnv === 'env2' && (
+                  <p className="help-text">
+                    <i className="fas fa-info-circle"></i>
+                    Date range is restricted to last 7 days in Environment 2
+                  </p>
+                )}
               </div>
             </div>
             
@@ -339,6 +365,7 @@ function DatastoreList() {
                         format="yyyy-MM-dd HH:mm:ss"
                         block
                         showMeridian
+                        {...dateRangeConfig}
                       />
                       <p className="help-text">
                         <i className="fas fa-info-circle"></i>
