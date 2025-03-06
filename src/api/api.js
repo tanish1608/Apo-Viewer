@@ -58,19 +58,12 @@ export const fetchDatastoreFiles = async (datastoreIds, queryString = '') => {
 
     const searchParams = new URLSearchParams(queryString);
     const whereConditions = {};
-    const sortByConditions = {};
     const fromRows = searchParams.get('fromRows') || '0';
     const rows = searchParams.get('rows') || '1000';
     
     searchParams.getAll('where').forEach((where, index) => {
       if (index < datastoreIdArray.length) {
         whereConditions[datastoreIdArray[index]] = where;
-      }
-    });
-    
-    searchParams.getAll('sortBy').forEach((sortBy, index) => {
-      if (index < datastoreIdArray.length) {
-        sortByConditions[datastoreIdArray[index]] = sortBy;
       }
     });
 
@@ -83,9 +76,7 @@ export const fetchDatastoreFiles = async (datastoreIds, queryString = '') => {
           if (whereConditions[datastoreId]) {
             params.append('where', whereConditions[datastoreId]);
           }
-          if (sortByConditions[datastoreId]) {
-            params.append('sortBy', sortByConditions[datastoreId]);
-          }
+          // Don't pass sortBy parameter to individual requests
           params.append('fromRows', fromRows);
           params.append('rows', rows);
 
@@ -119,6 +110,7 @@ export const fetchDatastoreFiles = async (datastoreIds, queryString = '') => {
       })
     );
 
+    // Combine all responses
     const combinedResponse = {
       element: responses.flatMap(response => response.element || []),
       hasMore: responses.some(response => response.hasMore),
@@ -126,7 +118,12 @@ export const fetchDatastoreFiles = async (datastoreIds, queryString = '') => {
       type: responses[0]?.type || "undefined"
     };
 
-    combinedResponse.element.sort((a, b) => (b.creationTime || 0) - (a.creationTime || 0));
+    // Sort the combined results
+    combinedResponse.element.sort((a, b) => {
+      const aTime = a.creationTime || (a.processingEndDate ? new Date(a.processingEndDate).getTime() : 0);
+      const bTime = b.creationTime || (b.processingEndDate ? new Date(b.processingEndDate).getTime() : 0);
+      return bTime - aTime; // DESC order
+    });
 
     return combinedResponse;
   } catch (error) {

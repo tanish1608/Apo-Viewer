@@ -335,3 +335,565 @@ src/
 - Input validation
 - XSS prevention
 - CSRF protection
+
+
+
+
+DataStore Detail
+```
+// First, let's update the columns logic in useEffect:
+
+const loadFiles = async () => {
+  if (!mounted) return;
+
+  try {
+    setLoading(true);
+    setError(null);
+    
+    let data;
+    
+    if (id.toLowerCase().includes('mock')) {
+      const mockDatastore = Object.values(mockData).find(store => 
+        store.datastoreId.toLowerCase().includes('mock') ||
+        store.datastoreId === id
+      );
+      
+      if (!mockDatastore) {
+        const firstMockDatastore = Object.values(mockData)[0];
+        if (!firstMockDatastore) {
+          throw new Error('No mock data available');
+        }
+        data = { element: firstMockDatastore.files };
+      } else {
+        data = { element: mockDatastore.files };
+      }
+    } else {
+      const searchParams = new URLSearchParams(window.location.search);
+      const where = searchParams.get('where');
+      const sortBy = `${DEFAULT_SORT_FIELD} DESC`; // Default sorting moved to server
+      const fromRows = ((currentPage - 1) * ITEMS_PER_PAGE).toString();
+      const rows = ITEMS_PER_PAGE.toString();
+      
+      const queryParams = new URLSearchParams();
+      if (where) queryParams.append('where', where);
+      queryParams.append('sortBy', sortBy);
+      queryParams.append('fromRows', fromRows);
+      queryParams.append('rows', rows);
+      
+      data = await fetchDatastoreFiles(
+        decodeURIComponent(id),
+        queryParams.toString()
+      );
+    }
+
+    if (!mounted) return;
+
+    if (!data?.element || !Array.isArray(data.element)) {
+      throw new Error('Invalid data format received');
+    }
+
+    setFiles(data.element);
+    
+    if (mounted && data.element.length > 0) {
+      // Get all unique columns from all files
+      const allColumns = new Set();
+      data.element.forEach(file => {
+        Object.keys(file).forEach(key => {
+          allColumns.add(key);
+        });
+      });
+
+      // Convert Set to Array and sort with priority
+      const priority = ['fileName', 'fileType', 'status', 'clientName', 'direction', 'clientConnection'];
+      const sortedColumns = Array.from(allColumns).sort((a, b) => {
+        const aIndex = priority.indexOf(a);
+        const bIndex = priority.indexOf(b);
+        
+        if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+        if (aIndex !== -1) return -1;
+        if (bIndex !== -1) return 1;
+        return a.localeCompare(b);
+      });
+      
+      setColumns(sortedColumns);
+      setColumnOrder(sortedColumns);
+      setVisibleColumns(sortedColumns);
+    }
+  } catch (error) {
+    if (mounted) {
+      console.error('Error fetching files:', error);
+      setError('Failed to load files. Please try again.');
+    }
+  } finally {
+    if (mounted) {
+      setLoading(false);
+    }
+  }
+};
+
+// Update the filteredFiles logic for better sorting:
+const filteredFiles = useMemo(() => {
+  if (!processedFiles.length) return [];
+  
+  let result = [...processedFiles];
+  
+  // Apply filters
+  const searchTerm = filters.search.toLowerCase();
+  if (searchTerm || filters.status.length || filters.fileType.length || 
+      filters.direction.length || filters.clientName || 
+      filters.dateRange.start || filters.dateRange.end) {
+    result = result.filter(file => {
+      // Date range filter
+      if (filters.dateRange.start || filters.dateRange.end) {
+        const fileDate = file.processingEndDate;
+        if (!fileDate) return false;
+
+        if (filters.dateRange.start && fileDate < new Date(filters.dateRange.start)) return false;
+        if (filters.dateRange.end && fileDate > new Date(filters.dateRange.end)) return false;
+      }
+
+      // Quick exit for other filters
+      if (filters.status.length && !filters.status.includes(file.status)) return false;
+      if (filters.fileType.length && !filters.fileType.includes(file.fileType)) return false;
+      if (filters.direction.length && !filters.direction.includes(file.direction)) return false;
+
+      if (filters.clientName && (!file.clientName || !file.clientName.toLowerCase().includes(filters.clientName.toLowerCase()))) {
+        return false;
+      }
+
+      // Optimize search
+      if (searchTerm) {
+        const searchableColumns = ['fileName', 'fileId', 'fileType', 'clientName'];
+        return searchableColumns.some(column => {
+          const value = file[column];
+          return value && value.toString().toLowerCase().includes(searchTerm);
+        });
+      }
+
+      return true;
+    });
+  }
+
+  // Apply sorting to all results, not just the current page
+  result.sort((a, b) => {
+    let aValue = a[sortConfig.field];
+    let bValue = b[sortConfig.field];
+
+    // Handle special cases
+    if (sortConfig.field === 'creationTime' || sortConfig.field === 'processingEndDate') {
+      aValue = a.processingEndDate ? new Date(a.processingEndDate).getTime() : 0;
+      bValue = b.processingEndDate ? new Date(b.processingEndDate).getTime() : 0;
+    }
+
+    // Handle null/undefined values
+    if (aValue === null || aValue === undefined) return 1;
+    if (bValue === null || bValue === undefined) return -1;
+    if (aValue === bValue) return 0;
+
+    // Compare based on type
+    if (typeof aValue === 'string') {
+      return sortConfig.direction === 'asc' 
+        ? aValue.localeCompare(bValue)
+        : bValue.localeCompare(aValue);
+    }
+
+    return sortConfig.direction === 'asc' 
+      ? (aValue < bValue ? -1 : 1)
+      : (bValue < aValue ? -1 : 1);
+  });
+
+  return result;
+}, [processedFiles, filters, sortConfig]);
+
+// Add environment-based date range restriction
+const handleDateRangeChange = (datastoreIndex, value) => {
+  const selectedEnv = localStorage.getItem('selected_env');
+  
+  if (selectedEnv === 'env3') {
+    const today = new Date();
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(today.getDate() - 7);
+    
+    const startDate = value[0] ? new Date(value[0]) : null;
+    if (startDate && startDate < sevenDaysAgo) {
+      addError('For Environment 3, you can only select dates within the last 7 days.');
+      return;
+    }
+  }
+  
+  setFilters(prev => ({
+    ...prev,
+    dateRange: {
+      start: value[0] ? value[0].toISOString().split('T')[0] : '',
+      end: value[1] ? value[1].toISOString().split('T')[0] : '',
+      preset: 'custom'
+    }
+  }));
+};
+
+export default handleDateRangeChange
+```
+
+
+filters css
+```
+/* Update the filters section styles */
+.filters-section {
+  margin-top: 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.filters-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.filter-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.add-filter-button,
+.add-custom-where-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  color: #475569;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.add-filter-button:hover,
+.add-custom-where-button:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #1a202c;
+}
+
+.add-filter-button i,
+.add-custom-where-button i {
+  font-size: 13px;
+}
+
+.filter-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 2fr auto;
+  gap: 12px;
+  margin-bottom: 12px;
+  align-items: center;
+  background: white;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.filter-field,
+.filter-condition,
+.filter-value {
+  width: 100%;
+}
+
+.filter-field select,
+.filter-condition select,
+.filter-value input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #1a202c;
+  background: white;
+  transition: all 0.2s ease;
+}
+
+.filter-field select:focus,
+.filter-condition select:focus,
+.filter-value input:focus {
+  outline: none;
+  border-color: var(--hsbc-red);
+  box-shadow: 0 0 0 2px rgba(219, 0, 17, 0.1);
+}
+
+.remove-filter-button {
+  background: none;
+  border: none;
+  color: #ef4444;
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.remove-filter-button:hover {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.remove-filter-button i {
+  font-size: 16px;
+}
+
+/* Custom Where Condition Styles */
+.custom-where-container {
+  margin-top: 16px;
+  padding: 16px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.custom-where-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.custom-where-input {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  resize: vertical;
+  min-height: 80px;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 12px;
+  width: 100%;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.custom-where-input:focus {
+  outline: none;
+  border-color: var(--hsbc-red);
+  box-shadow: 0 0 0 2px rgba(219, 0, 17, 0.1);
+}
+```
+
+
+
+
+
+datastore
+```
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { fetchDatastoreFiles } from '../api/api';
+import * as XLSX from 'xlsx';
+import DatePicker from 'react-datepicker';
+import Select from 'react-select';
+import "react-datepicker/dist/react-datepicker.css";
+import '../styles/Sort.css';
+import '../styles/ColumnSelector.css';
+import { mockData } from '../api/mockData';
+import ErrorToast from './ErrorToast';
+
+// Constants
+const ITEMS_PER_PAGE = 50;
+const SEARCH_DEBOUNCE_MS = 300;
+const EXPORT_BATCH_SIZE = 1000;
+const DEFAULT_SORT_FIELD = 'creationTime';
+const DEFAULT_SORT_DIRECTION = 'desc';
+
+function DatastoreDetail() {
+  const loadFiles = async () => {
+    if (!mounted) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+      
+      let data;
+      
+      if (id.toLowerCase().includes('mock')) {
+        const mockDatastore = Object.values(mockData).find(store => 
+          store.datastoreId.toLowerCase().includes('mock') ||
+          store.datastoreId === id
+        );
+        
+        if (!mockDatastore) {
+          const firstMockDatastore = Object.values(mockData)[0];
+          if (!firstMockDatastore) {
+            throw new Error('No mock data available');
+          }
+          data = { element: firstMockDatastore.files };
+        } else {
+          data = { element: mockDatastore.files };
+        }
+      } else {
+        const searchParams = new URLSearchParams(window.location.search);
+        const where = searchParams.get('where');
+        const fromRows = ((currentPage - 1) * ITEMS_PER_PAGE).toString();
+        const rows = ITEMS_PER_PAGE.toString();
+        
+        const queryParams = new URLSearchParams();
+        if (where) queryParams.append('where', where);
+        queryParams.append('fromRows', fromRows);
+        queryParams.append('rows', rows);
+        
+        data = await fetchDatastoreFiles(
+          decodeURIComponent(id),
+          queryParams.toString()
+        );
+      }
+
+      if (!mounted) return;
+
+      if (!data?.element || !Array.isArray(data.element)) {
+        throw new Error('Invalid data format received');
+      }
+
+      setFiles(data.element);
+      
+      if (mounted && data.element.length > 0) {
+        // Get all unique columns from all files
+        const allColumns = new Set();
+        data.element.forEach(file => {
+          Object.keys(file).forEach(key => {
+            allColumns.add(key);
+          });
+        });
+
+        // Convert Set to Array and sort with priority
+        const priority = ['fileName', 'fileType', 'status', 'clientName', 'direction', 'clientConnection'];
+        const sortedColumns = Array.from(allColumns).sort((a, b) => {
+          const aIndex = priority.indexOf(a);
+          const bIndex = priority.indexOf(b);
+          
+          if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+          if (aIndex !== -1) return -1;
+          if (bIndex !== -1) return 1;
+          return a.localeCompare(b);
+        });
+        
+        setColumns(sortedColumns);
+        setColumnOrder(sortedColumns);
+        setVisibleColumns(sortedColumns);
+      }
+    } catch (error) {
+      if (mounted) {
+        console.error('Error fetching files:', error);
+        setError('Failed to load files. Please try again.');
+      }
+    } finally {
+      if (mounted) {
+        setLoading(false);
+      }
+    }
+  };
+
+  const filteredFiles = useMemo(() => {
+    if (!processedFiles.length) return [];
+    
+    let result = [...processedFiles];
+    
+    // Apply filters
+    const searchTerm = filters.search.toLowerCase();
+    if (searchTerm || filters.status.length || filters.fileType.length || 
+        filters.direction.length || filters.clientName || 
+        filters.dateRange.start || filters.dateRange.end) {
+      result = result.filter(file => {
+        // Date range filter
+        if (filters.dateRange.start || filters.dateRange.end) {
+          const fileDate = file.processingEndDate;
+          if (!fileDate) return false;
+
+          if (filters.dateRange.start && fileDate < new Date(filters.dateRange.start)) return false;
+          if (filters.dateRange.end && fileDate > new Date(filters.dateRange.end)) return false;
+        }
+
+        // Quick exit for other filters
+        if (filters.status.length && !filters.status.includes(file.status)) return false;
+        if (filters.fileType.length && !filters.fileType.includes(file.fileType)) return false;
+        if (filters.direction.length && !filters.direction.includes(file.direction)) return false;
+
+        if (filters.clientName && (!file.clientName || !file.clientName.toLowerCase().includes(filters.clientName.toLowerCase()))) {
+          return false;
+        }
+
+        // Optimize search
+        if (searchTerm) {
+          const searchableColumns = ['fileName', 'fileId', 'fileType', 'clientName'];
+          return searchableColumns.some(column => {
+            const value = file[column];
+            return value && value.toString().toLowerCase().includes(searchTerm);
+          });
+        }
+
+        return true;
+      });
+    }
+
+    // Apply sorting to all results, not just the current page
+    result.sort((a, b) => {
+      let aValue = a[sortConfig.field];
+      let bValue = b[sortConfig.field];
+
+      // Handle special cases
+      if (sortConfig.field === 'creationTime' || sortConfig.field === 'processingEndDate') {
+        aValue = a.processingEndDate ? new Date(a.processingEndDate).getTime() : 0;
+        bValue = b.processingEndDate ? new Date(b.processingEndDate).getTime() : 0;
+      }
+
+      // Handle null/undefined values
+      if (aValue === null || aValue === undefined) return 1;
+      if (bValue === null || bValue === undefined) return -1;
+      if (aValue === bValue) return 0;
+
+      // Compare based on type
+      if (typeof aValue === 'string') {
+        return sortConfig.direction === 'asc' 
+          ? aValue.localeCompare(bValue)
+          : bValue.localeCompare(aValue);
+      }
+
+      return sortConfig.direction === 'asc' 
+        ? (aValue < bValue ? -1 : 1)
+        : (bValue < aValue ? -1 : 1);
+    });
+
+    return result;
+  }, [processedFiles, filters, sortConfig]);
+
+  const handleDateRangeChange = (datastoreIndex, value) => {
+    const selectedEnv = localStorage.getItem('selected_env');
+    
+    if (selectedEnv === 'env3') {
+      const today = new Date();
+      const sevenDaysAgo = new Date(today);
+      sevenDaysAgo.setDate(today.getDate() - 7);
+      
+      const startDate = value[0] ? new Date(value[0]) : null;
+      if (startDate && startDate < sevenDaysAgo) {
+        addError('For Environment 3, you can only select dates within the last 7 days.');
+        return;
+      }
+    }
+    
+    setFilters(prev => ({
+      ...prev,
+      dateRange: {
+        start: value[0] ? value[0].toISOString().split('T')[0] : '',
+        end: value[1] ? value[1].toISOString().split('T')[0] : '',
+        preset: 'custom'
+      }
+    }));
+  };
+}
+
+export default React.memo(DatastoreDetail);
+```
