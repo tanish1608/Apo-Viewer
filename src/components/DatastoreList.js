@@ -43,8 +43,12 @@ const CONDITION_OPTIONS = [
   { value: '<=', label: 'Less Than or Equal (<=)' }
 ];
 
-// Maximum date range in milliseconds (7 days)
-const MAX_DATE_RANGE = 7 * 24 * 60 * 60 * 1000;
+// Maximum date ranges in milliseconds
+const DATE_RANGES = {
+  env1: 24 * 60 * 60 * 1000, // 24 hours
+  env2: 7 * 24 * 60 * 60 * 1000, // 7 days
+  env3: 7 * 24 * 60 * 60 * 1000  // 7 days
+};
 
 function DatastoreList() {
   const [searchFields, setSearchFields] = useState([
@@ -145,9 +149,10 @@ function DatastoreList() {
     const startDate = new Date(value[0]);
     const endDate = new Date(value[1]);
     const rangeDuration = endDate.getTime() - startDate.getTime();
+    const maxRange = DATE_RANGES[selectedEnv];
 
-    if (rangeDuration > MAX_DATE_RANGE) {
-      setError('Date range cannot exceed 7 days');
+    if (rangeDuration > maxRange) {
+      setError(`Date range cannot exceed ${selectedEnv === 'env1' ? '24 hours' : '7 days'}`);
       return;
     }
 
@@ -232,6 +237,18 @@ function DatastoreList() {
     });
     
     return options;
+  };
+
+  const getDateRangeHelpText = () => {
+    return selectedEnv === 'env1' 
+      ? 'Maximum range is 24 hours. Times are converted to GMT and Unix timestamps for querying'
+      : 'Maximum range is 7 days. Times are converted to GMT and Unix timestamps for querying';
+  };
+
+  const getDateRangePlaceholder = () => {
+    return selectedEnv === 'env1'
+      ? 'Select date and time range (max 24 hours)'
+      : 'Select date and time range (max 7 days)';
   };
 
   return (
@@ -355,14 +372,14 @@ function DatastoreList() {
                         className="date-range-picker"
                         value={field.dateRange}
                         onChange={(value) => handleDateRangeChange(datastoreIndex, value)}
-                        placeholder="Select date and time range (max 7 days)"
+                        placeholder={getDateRangePlaceholder()}
                         format="yyyy-MM-dd HH:mm:ss"
                         block
                         showMeridian
                       />
                       <p className="help-text">
                         <i className="fas fa-info-circle"></i>
-                        Maximum range is 7 days. Times are converted to GMT and Unix timestamps for querying
+                        {getDateRangeHelpText()}
                       </p>
                     </div>
 
