@@ -43,6 +43,9 @@ const CONDITION_OPTIONS = [
   { value: '<=', label: 'Less Than or Equal (<=)' }
 ];
 
+// Maximum date range in milliseconds (7 days)
+const MAX_DATE_RANGE = 7 * 24 * 60 * 60 * 1000;
+
 function DatastoreList() {
   const [searchFields, setSearchFields] = useState([
     { 
@@ -63,29 +66,7 @@ function DatastoreList() {
   useEffect(() => {
     localStorage.setItem('selected_env', selectedEnv);
     localStorage.setItem('api_url', ENV_CONFIGS[selectedEnv]);
-
-    // Reset date ranges when switching to env2
-    if (selectedEnv === 'env2') {
-      setSearchFields(prev => prev.map(field => ({
-        ...field,
-        dateRange: [null, null]
-      })));
-    }
   }, [selectedEnv]);
-
-  const getDateRangeConfig = () => {
-    if (selectedEnv === 'env2') {
-      const today = new Date();
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(today.getDate() - 7);
-      
-      return {
-        disabledDate: date => date < sevenDaysAgo || date > today,
-        defaultValue: [sevenDaysAgo, today]
-      };
-    }
-    return {};
-  };
 
   const handleAddDatastore = () => {
     setSearchFields([
@@ -154,9 +135,26 @@ function DatastoreList() {
   };
 
   const handleDateRangeChange = (datastoreIndex, value) => {
+    if (!value || !value[0] || !value[1]) {
+      const newFields = [...searchFields];
+      newFields[datastoreIndex].dateRange = [null, null];
+      setSearchFields(newFields);
+      return;
+    }
+
+    const startDate = new Date(value[0]);
+    const endDate = new Date(value[1]);
+    const rangeDuration = endDate.getTime() - startDate.getTime();
+
+    if (rangeDuration > MAX_DATE_RANGE) {
+      setError('Date range cannot exceed 7 days');
+      return;
+    }
+
     const newFields = [...searchFields];
     newFields[datastoreIndex].dateRange = value;
     setSearchFields(newFields);
+    setError('');
   };
 
   const convertToUnixTimestamp = (date) => {
@@ -236,8 +234,6 @@ function DatastoreList() {
     return options;
   };
 
-  const dateRangeConfig = getDateRangeConfig();
-
   return (
     <div className="container">
       <div className="header">
@@ -301,12 +297,10 @@ function DatastoreList() {
                   <option value="env2">Environment 2</option>
                   <option value="env3">Environment 3</option>
                 </select>
-                {selectedEnv === 'env2' && (
-                  <p className="help-text">
-                    <i className="fas fa-info-circle"></i>
-                    Date range is restricted to last 7 days in Environment 2
-                  </p>
-                )}
+                <p className="help-text">
+                  <i className="fas fa-info-circle"></i>
+                  Select the environment to connect to
+                </p>
               </div>
             </div>
             
@@ -361,15 +355,14 @@ function DatastoreList() {
                         className="date-range-picker"
                         value={field.dateRange}
                         onChange={(value) => handleDateRangeChange(datastoreIndex, value)}
-                        placeholder="Select date and time range"
+                        placeholder="Select date and time range (max 7 days)"
                         format="yyyy-MM-dd HH:mm:ss"
                         block
                         showMeridian
-                        {...dateRangeConfig}
                       />
                       <p className="help-text">
                         <i className="fas fa-info-circle"></i>
-                        Times are converted to GMT and Unix timestamps for querying
+                        Maximum range is 7 days. Times are converted to GMT and Unix timestamps for querying
                       </p>
                     </div>
 
