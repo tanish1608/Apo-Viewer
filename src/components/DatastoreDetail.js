@@ -201,11 +201,22 @@ function DatastoreDetail() {
         if (mounted && data.element.length > 0) {
           // Create a map to store all unique columns and their frequencies
           const columnMap = new Map();
+          const columnTypes = new Map();
           
-          // First pass: collect all unique columns and their frequencies
+          // First pass: collect all unique columns, their frequencies, and types
           data.element.forEach(file => {
-            Object.keys(file).forEach(key => {
+            Object.entries(file).forEach(([key, value]) => {
+              // Update frequency
               columnMap.set(key, (columnMap.get(key) || 0) + 1);
+              
+              // Track value type
+              if (value !== null && value !== undefined) {
+                const type = typeof value;
+                if (!columnTypes.has(key)) {
+                  columnTypes.set(key, new Set());
+                }
+                columnTypes.get(key).add(type);
+              }
             });
           });
 
@@ -221,9 +232,25 @@ function DatastoreDetail() {
             'creationTime',
             'fileId'
           ];
+
+          // Special columns that should always be included if present
+          const specialColumns = ['A_C_K_3', 'A_C_K_4'];
           
           // Sort columns maintaining priority and including ALL columns
           const sortedColumns = Array.from(columnMap.keys()).sort((a, b) => {
+            // If either column is a special column, it should be included
+            const aIsSpecial = specialColumns.includes(a);
+            const bIsSpecial = specialColumns.includes(b);
+            
+            // If both are special columns, maintain their relative order
+            if (aIsSpecial && bIsSpecial) {
+              return specialColumns.indexOf(a) - specialColumns.indexOf(b);
+            }
+            
+            // If only one is a special column, it comes after priority columns
+            if (aIsSpecial) return priority.length;
+            if (bIsSpecial) return -priority.length;
+            
             const aIndex = priority.indexOf(a);
             const bIndex = priority.indexOf(b);
             
@@ -233,8 +260,21 @@ function DatastoreDetail() {
             if (aIndex !== -1) return -1;
             // If only b is a priority column, it comes first
             if (bIndex !== -1) return 1;
-            // For non-priority columns, sort by frequency (most frequent first)
-            return columnMap.get(b) - columnMap.get(a);
+            
+            // For non-priority columns, sort by:
+            // 1. Frequency (most frequent first)
+            const freqDiff = columnMap.get(b) - columnMap.get(a);
+            if (freqDiff !== 0) return freqDiff;
+            
+            // 2. Alphabetically if frequencies are equal
+            return a.localeCompare(b);
+          });
+
+          // Ensure special columns are always included
+          specialColumns.forEach(column => {
+            if (columnMap.has(column) && !sortedColumns.includes(column)) {
+              sortedColumns.push(column);
+            }
           });
 
           setColumns(sortedColumns);
