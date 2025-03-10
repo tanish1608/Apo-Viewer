@@ -15,11 +15,39 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
+.login-header {
+  margin-bottom: 24px;
+  text-align: center;
+}
+
 .login-title {
-  font-size: 18px;
-  font-weight: normal;
-  color: var(--text-primary);
-  margin: 0 0 24px 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--dark-grey);
+  margin: 0 0 8px 0;
+}
+
+.login-subtitle {
+  font-size: 14px;
+  color: #666;
+  margin: 0;
+}
+
+.login-error {
+  background: #fff2f0;
+  border: 1px solid #ffccc7;
+  border-radius: 2px;
+  color: #ff4d4f;
+  padding: 12px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.login-error i {
+  font-size: 14px;
 }
 
 .form-group {
@@ -29,44 +57,79 @@
 .form-label {
   display: block;
   font-size: 13px;
-  color: var(--text-primary);
+  color: var(--dark-grey);
   margin-bottom: 4px;
 }
 
 .form-input {
   width: 100%;
-  padding: 6px 8px;
+  padding: 8px 12px;
   font-size: 13px;
   border: 1px solid var(--border-color);
   border-radius: 2px;
-  box-sizing: border-box;
+  transition: all 0.3s;
 }
 
 .form-input:focus {
-  border-color: var(--primary-blue);
+  border-color: var(--hsbc-red);
   outline: none;
+  box-shadow: 0 0 0 2px rgba(219, 0, 17, 0.1);
+}
+
+.form-input.disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+  color: #999;
+}
+
+.input-help {
+  font-size: 12px;
+  color: #666;
+  margin: 4px 0 0 0;
 }
 
 .login-button {
   width: 100%;
-  padding: 8px;
-  font-size: 13px;
-  background: var(--primary-blue);
+  padding: 8px 16px;
+  font-size: 14px;
+  background: var(--hsbc-red);
   color: white;
   border: none;
   border-radius: 2px;
   cursor: pointer;
+  transition: all 0.3s;
 }
 
-.login-button:hover {
-  background: var(--secondary-blue);
+.login-button:hover:not(:disabled) {
+  background: #c50010;
 }
 
-.login-error {
-  background: #ffe6e6;
-  color: var(--error-red);
-  padding: 8px;
-  margin-bottom: 16px;
-  font-size: 13px;
-  border-radius: 2px;
+.login-button:disabled {
+  background: #ffccc7;
+  cursor: not-allowed;
+}
+
+.login-button-loading {
+  position: relative;
+  color: transparent;
+}
+
+.login-button-loading::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border: 2px solid white;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

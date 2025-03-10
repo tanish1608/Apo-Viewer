@@ -11,6 +11,7 @@ function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [passwordDisabled, setPasswordDisabled] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
   const { user, login } = useAuth();
@@ -29,6 +30,7 @@ function Login() {
     }
   }, [user, navigate]);
 
+  // Check lockout status
   useEffect(() => {
     if (loginAttempts.timestamp) {
       const timeElapsed = Date.now() - loginAttempts.timestamp;
@@ -41,6 +43,31 @@ function Login() {
       }
     }
   }, [loginAttempts]);
+
+  // Handle username changes
+  const handleUsernameChange = (e) => {
+    const newUsername = e.target.value.trim();
+    setUsername(newUsername);
+    
+    // Enable password field only if username starts with 'sildataview'
+    const isValidUsername = newUsername.toLowerCase().startsWith('sildataview');
+    setPasswordDisabled(!isValidUsername);
+    
+    // Clear password if username becomes invalid
+    if (!isValidUsername && password) {
+      setPassword('');
+    }
+    
+    setError('');
+  };
+
+  // Handle password changes
+  const handlePasswordChange = (e) => {
+    if (!passwordDisabled) {
+      setPassword(e.target.value);
+      setError('');
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -56,8 +83,16 @@ function Login() {
       setError('');
       setLoading(true);
 
-      if (!username.trim() || !password.trim()) {
-        throw new Error('Please enter both username and password');
+      if (!username.trim()) {
+        throw new Error('Please enter a username');
+      }
+
+      if (!username.toLowerCase().startsWith('sildataview')) {
+        throw new Error('Invalid username format. Username must start with "sildataview"');
+      }
+
+      if (!password.trim()) {
+        throw new Error('Please enter a password');
       }
 
       await login(username, password);
@@ -92,6 +127,7 @@ function Login() {
 
         {error && (
           <div className="login-error">
+            <i className="fas fa-exclamation-circle"></i>
             {error}
           </div>
         )}
@@ -107,12 +143,13 @@ function Login() {
               type="text"
               required
               value={username}
-              onChange={(e) => setUsername(e.target.value.trim())}
+              onChange={handleUsernameChange}
               className="form-input"
               placeholder="Enter your username"
               autoComplete="username"
               disabled={loading || isLocked}
             />
+            <p className="input-help">Username must start with "sildataview"</p>
           </div>
 
           <div className="form-group">
@@ -125,17 +162,17 @@ function Login() {
               type="password"
               required
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="form-input"
+              onChange={handlePasswordChange}
+              className={`form-input ${passwordDisabled ? 'disabled' : ''}`}
               placeholder="Enter your password"
               autoComplete="current-password"
-              disabled={loading || isLocked}
+              disabled={loading || isLocked || passwordDisabled}
             />
           </div>
 
           <button
             type="submit"
-            disabled={loading || isLocked}
+            disabled={loading || isLocked || passwordDisabled}
             className={`login-button ${loading ? 'login-button-loading' : ''}`}
           >
             {loading ? 'Signing in...' : 'Sign in'}
