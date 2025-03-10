@@ -690,210 +690,58 @@ filters css
 
 datastore
 ```
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { fetchDatastoreFiles } from '../api/api';
-import * as XLSX from 'xlsx';
-import DatePicker from 'react-datepicker';
-import Select from 'react-select';
-import "react-datepicker/dist/react-datepicker.css";
-import '../styles/Sort.css';
-import '../styles/ColumnSelector.css';
-import { mockData } from '../api/mockData';
-import ErrorToast from './ErrorToast';
-
-// Constants
-const ITEMS_PER_PAGE = 50;
-const SEARCH_DEBOUNCE_MS = 300;
-const EXPORT_BATCH_SIZE = 1000;
-const DEFAULT_SORT_FIELD = 'creationTime';
-const DEFAULT_SORT_DIRECTION = 'desc';
-
-function DatastoreDetail() {
-  const loadFiles = async () => {
-    if (!mounted) return;
-
-    try {
-      setLoading(true);
-      setError(null);
-      
-      let data;
-      
-      if (id.toLowerCase().includes('mock')) {
-        const mockDatastore = Object.values(mockData).find(store => 
-          store.datastoreId.toLowerCase().includes('mock') ||
-          store.datastoreId === id
-        );
-        
-        if (!mockDatastore) {
-          const firstMockDatastore = Object.values(mockData)[0];
-          if (!firstMockDatastore) {
-            throw new Error('No mock data available');
-          }
-          data = { element: firstMockDatastore.files };
-        } else {
-          data = { element: mockDatastore.files };
-        }
-      } else {
-        const searchParams = new URLSearchParams(window.location.search);
-        const where = searchParams.get('where');
-        const fromRows = ((currentPage - 1) * ITEMS_PER_PAGE).toString();
-        const rows = ITEMS_PER_PAGE.toString();
-        
-        const queryParams = new URLSearchParams();
-        if (where) queryParams.append('where', where);
-        queryParams.append('fromRows', fromRows);
-        queryParams.append('rows', rows);
-        
-        data = await fetchDatastoreFiles(
-          decodeURIComponent(id),
-          queryParams.toString()
-        );
-      }
-
-      if (!mounted) return;
-
-      if (!data?.element || !Array.isArray(data.element)) {
-        throw new Error('Invalid data format received');
-      }
-
-      setFiles(data.element);
-      
-      if (mounted && data.element.length > 0) {
-        // Get all unique columns from all files
-        const allColumns = new Set();
-        data.element.forEach(file => {
-          Object.keys(file).forEach(key => {
-            allColumns.add(key);
-          });
-        });
-
-        // Convert Set to Array and sort with priority
-        const priority = ['fileName', 'fileType', 'status', 'clientName', 'direction', 'clientConnection'];
-        const sortedColumns = Array.from(allColumns).sort((a, b) => {
-          const aIndex = priority.indexOf(a);
-          const bIndex = priority.indexOf(b);
-          
-          if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
-          if (aIndex !== -1) return -1;
-          if (bIndex !== -1) return 1;
-          return a.localeCompare(b);
-        });
-        
-        setColumns(sortedColumns);
-        setColumnOrder(sortedColumns);
-        setVisibleColumns(sortedColumns);
-      }
-    } catch (error) {
-      if (mounted) {
-        console.error('Error fetching files:', error);
-        setError('Failed to load files. Please try again.');
-      }
-    } finally {
-      if (mounted) {
-        setLoading(false);
-      }
-    }
-  };
-
-  const filteredFiles = useMemo(() => {
-    if (!processedFiles.length) return [];
-    
-    let result = [...processedFiles];
-    
-    // Apply filters
-    const searchTerm = filters.search.toLowerCase();
-    if (searchTerm || filters.status.length || filters.fileType.length || 
-        filters.direction.length || filters.clientName || 
-        filters.dateRange.start || filters.dateRange.end) {
-      result = result.filter(file => {
-        // Date range filter
-        if (filters.dateRange.start || filters.dateRange.end) {
-          const fileDate = file.processingEndDate;
-          if (!fileDate) return false;
-
-          if (filters.dateRange.start && fileDate < new Date(filters.dateRange.start)) return false;
-          if (filters.dateRange.end && fileDate > new Date(filters.dateRange.end)) return false;
-        }
-
-        // Quick exit for other filters
-        if (filters.status.length && !filters.status.includes(file.status)) return false;
-        if (filters.fileType.length && !filters.fileType.includes(file.fileType)) return false;
-        if (filters.direction.length && !filters.direction.includes(file.direction)) return false;
-
-        if (filters.clientName && (!file.clientName || !file.clientName.toLowerCase().includes(filters.clientName.toLowerCase()))) {
-          return false;
-        }
-
-        // Optimize search
-        if (searchTerm) {
-          const searchableColumns = ['fileName', 'fileId', 'fileType', 'clientName'];
-          return searchableColumns.some(column => {
-            const value = file[column];
-            return value && value.toString().toLowerCase().includes(searchTerm);
-          });
-        }
-
-        return true;
-      });
-    }
-
-    // Apply sorting to all results, not just the current page
-    result.sort((a, b) => {
-      let aValue = a[sortConfig.field];
-      let bValue = b[sortConfig.field];
-
-      // Handle special cases
-      if (sortConfig.field === 'creationTime' || sortConfig.field === 'processingEndDate') {
-        aValue = a.processingEndDate ? new Date(a.processingEndDate).getTime() : 0;
-        bValue = b.processingEndDate ? new Date(b.processingEndDate).getTime() : 0;
-      }
-
-      // Handle null/undefined values
-      if (aValue === null || aValue === undefined) return 1;
-      if (bValue === null || bValue === undefined) return -1;
-      if (aValue === bValue) return 0;
-
-      // Compare based on type
-      if (typeof aValue === 'string') {
-        return sortConfig.direction === 'asc' 
-          ? aValue.localeCompare(bValue)
-          : bValue.localeCompare(aValue);
-      }
-
-      return sortConfig.direction === 'asc' 
-        ? (aValue < bValue ? -1 : 1)
-        : (bValue < aValue ? -1 : 1);
-    });
-
-    return result;
-  }, [processedFiles, filters, sortConfig]);
-
-  const handleDateRangeChange = (datastoreIndex, value) => {
-    const selectedEnv = localStorage.getItem('selected_env');
-    
-    if (selectedEnv === 'env3') {
-      const today = new Date();
-      const sevenDaysAgo = new Date(today);
-      sevenDaysAgo.setDate(today.getDate() - 7);
-      
-      const startDate = value[0] ? new Date(value[0]) : null;
-      if (startDate && startDate < sevenDaysAgo) {
-        addError('For Environment 3, you can only select dates within the last 7 days.');
-        return;
-      }
-    }
-    
-    setFilters(prev => ({
-      ...prev,
-      dateRange: {
-        start: value[0] ? value[0].toISOString().split('T')[0] : '',
-        end: value[1] ? value[1].toISOString().split('T')[0] : '',
-        preset: 'custom'
-      }
-    }));
-  };
+{
+  "name": "datastore-viewer",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@testing-library/jest-dom": "^6.1.4",
+    "@testing-library/react": "^14.1.2",
+    "@testing-library/user-event": "^14.5.1",
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "node-fetch": "^3.3.2",
+    "react": "^18.2.0",
+    "react-datepicker": "^4.25.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.20.0",
+    "react-scripts": "5.0.1",
+    "react-select": "^5.8.0",
+    "rsuite": "^5.46.1",
+    "web-vitals": "^3.5.0",
+    "xlsx": "^0.18.5"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "server": "node server.js",
+    "dev": "concurrently \"npm run server\" \"npm run start\"",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
 }
-
-export default React.memo(DatastoreDetail);
 ```
