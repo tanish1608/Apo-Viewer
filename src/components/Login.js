@@ -95,7 +95,13 @@ function Login() {
         throw new Error('Please enter a password');
       }
 
-      await login(username, password);
+      const response = await login(username, password);
+      
+      // Check for specific error responses from the API
+      if (response?.status === "UNAUTHORIZED" || response?.name === "AUTHENTICATION_FAILED") {
+        throw new Error(response.message?.[0] || 'Invalid credentials. Please check your username and password.');
+      }
+
       navigate(from, { replace: true });
     } catch (err) {
       const newAttempts = loginAttempts.count + 1;

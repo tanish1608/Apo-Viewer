@@ -945,3 +945,4 @@ function DatastoreDetail() {
 }
 
 export default React.memo(DatastoreDetail);
+
