@@ -34,31 +34,49 @@ const processChunkedResponse = async (response, res) => {
   res.send(rawdata.toString());
 };
 
-// verifiy the auth data
-app.get('/auth', (req, res) => {
+// verify the auth data
+app.get('/auth', async (req, res) => {
   const { username, password } = req.query;
+  
   if (!username || !password) {
-    return res.status(400).json({ error: 'Missing credentials' });
-  }
-  const apiUrl = `${BASE_URL}/auth`;
-  fetch(apiUrl, {
-    method: 'GET',
-    headers: getAuthHeaders(username, password),
-    agent
-  })
-    .then(response => {
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return response.json();
-    })
-    .then(data => {
-      res.json(data);
-    })
-    .catch(error => {
-      console.error('Error fetching auth:', error);
-      res.status(500).json({ error: 'Failed to fetch auth' });
+    return res.status(401).json({
+      status: "UNAUTHORIZED",
+      name: "AUTHENTICATION_FAILED",
+      message: [
+        `Unauthenticated access is not allowed. client-IP=${req.ip}`
+      ],
+      statusText: "Unauthorized",
+      statusCode: 401
     });
+  }
+
+  try {
+    const apiUrl = `${BASE_URL}/auth`;
+    const response = await fetch(apiUrl, {
+      method: 'GET',
+      headers: getAuthHeaders(username, password),
+      agent
+    });
+
+    const data = await response.json();
+
+    // Check if the API response indicates unauthorized access
+    if (data.status === "UNAUTHORIZED" || data.name === "AUTHENTICATION_FAILED") {
+      return res.status(401).json(data);
+    }
+
+    // If no unauthorized status, proceed with successful authentication
+    res.json(data);
+  } catch (error) {
+    console.error('Error fetching auth:', error);
+    res.status(500).json({
+      status: "ERROR",
+      name: "INTERNAL_SERVER_ERROR",
+      message: ["Failed to authenticate user"],
+      statusText: "Internal Server Error",
+      statusCode: 500
+    });
+  }
 });
 
 // Update the datastore files endpoint to handle where, sortBy, fromRows and rows parameters
@@ -67,7 +85,15 @@ app.get('/datastores/:id/files', async (req, res) => {
   const { id } = req.params;
 
   if (!username || !password) {
-    return res.status(400).json({ error: 'Missing credentials' });
+    return res.status(401).json({
+      status: "UNAUTHORIZED",
+      name: "AUTHENTICATION_FAILED",
+      message: [
+        `Unauthenticated access is not allowed. client-IP=${req.ip}`
+      ],
+      statusText: "Unauthorized",
+      statusCode: 401
+    });
   }
 
   try {
@@ -86,16 +112,22 @@ app.get('/datastores/:id/files', async (req, res) => {
       agent
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+    // For datastore endpoint, check the response data for unauthorized status
+    const data = await response.json();
+    if (data.status === "UNAUTHORIZED" || data.name === "AUTHENTICATION_FAILED") {
+      return res.status(401).json(data);
     }
 
-    res.setHeader('Content-Type', 'application/json');
-    await processChunkedResponse(response, res);
-
+    res.json(data);
   } catch (error) {
     console.error('Error fetching datastore files:', error);
-    res.status(500).json({ error: 'Failed to fetch datastore files' });
+    res.status(500).json({
+      status: "ERROR",
+      name: "INTERNAL_SERVER_ERROR",
+      message: ["Failed to fetch datastore files"],
+      statusText: "Internal Server Error",
+      statusCode: 500
+    });
   }
 });
 
