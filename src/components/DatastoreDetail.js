@@ -79,6 +79,11 @@ function DatastoreDetail() {
   const addError = useCallback((error) => {
     const id = Date.now();
     setErrors(prev => [...prev, { id, message: error }]);
+    
+    // Auto-dismiss error after 5 seconds
+    setTimeout(() => {
+      removeError(id);
+    }, 5000);
   }, []);
 
   const removeError = useCallback((id) => {
@@ -127,9 +132,10 @@ function DatastoreDetail() {
       }));
     } catch (err) {
       console.error('Error processing files:', err);
+      addError('Error processing file data: ' + err.message);
       return [];
     }
-  }, [files]);
+  }, [files, addError]);
 
   // Search debouncing
   useEffect(() => {
@@ -184,10 +190,16 @@ function DatastoreDetail() {
           queryParams.append('fromRows', fromRows);
           queryParams.append('rows', rows);
           
-          data = await fetchDatastoreFiles(
-            decodeURIComponent(id),
-            queryParams.toString()
-          );
+          try {
+            data = await fetchDatastoreFiles(
+              decodeURIComponent(id),
+              queryParams.toString()
+            );
+          } catch (error) {
+            console.error('Failed to fetch files:', error);
+            addError(`Failed to fetch files for datastore ${id}: ${error.message}`);
+            throw error;
+          }
         }
 
         if (!mounted) return;
@@ -283,8 +295,9 @@ function DatastoreDetail() {
         }
       } catch (error) {
         if (mounted) {
-          console.error('Error fetching files:', error);
-          setError('Failed to load files. Please try again.');
+          console.error('Error loading files:', error);
+          addError(`Error loading files: ${error.message}`);
+          setFiles([]);
         }
       } finally {
         if (mounted) {
@@ -298,7 +311,7 @@ function DatastoreDetail() {
     return () => {
       mounted = false;
     };
-  }, [id, currentPage]);
+  }, [id, currentPage, addError]);
 
   // Handlers
   const handleSort = useCallback((field) => {
@@ -460,35 +473,45 @@ function DatastoreDetail() {
       XLSX.writeFile(workbook, `${getDatastoreName(id)}_export.xlsx`);
     } catch (error) {
       console.error('Export failed:', error);
-      addError('Failed to export data. Please try again.');
+      addError('Failed to export data: ' + error.message);
     } finally {
       setExportLoading(false);
     }
   }, [filteredFiles, visibleColumns, id, getDatastoreName, addError]);
 
   const downloadCSV = useCallback(() => {
-    const csvContent = [
-      visibleColumns.map(column => formatColumnHeader(column)).join(','),
-      ...files.map(file => 
-        visibleColumns.map(column => {
-          const value = file[column] || '';
-          return typeof value === 'string' && value.includes(',') 
-            ? `"${value}"` 
-            : value;
-        }).join(',')
-      )
-    ].join('\n');
+    try {
+      if (files.length === 0) {
+        addError('No data available to export');
+        return;
+      }
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `${getDatastoreName(id)}_export.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  }, [files, visibleColumns, id, getDatastoreName]);
+      const csvContent = [
+        visibleColumns.map(column => formatColumnHeader(column)).join(','),
+        ...files.map(file => 
+          visibleColumns.map(column => {
+            const value = file[column] || '';
+            return typeof value === 'string' && value.includes(',') 
+              ? `"${value}"` 
+              : value;
+          }).join(',')
+        )
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `${getDatastoreName(id)}_export.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('CSV export failed:', error);
+      addError('Failed to export CSV: ' + error.message);
+    }
+  }, [files, visibleColumns, id, getDatastoreName, addError]);
 
   // Loading state
   if (loading) {
@@ -752,7 +775,7 @@ function DatastoreDetail() {
               Sort
             </button>
             
-            {showSortMenu && (
+              {showSortMenu && (
               <div className="sort-menu">
                 <div className="sort-menu-header">Sort by</div>
                 <div
@@ -859,7 +882,7 @@ function DatastoreDetail() {
             </button>
           )}
         </div>
-        <div className="results-count">
+        <div className="results count">
           {filteredFiles.length} results
         </div>
       </div>
@@ -919,7 +942,7 @@ function DatastoreDetail() {
           </button>
           
           <div className="pagination-numbers">
-            {Array. from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
               <button
                 key={page}
                 onClick={() => setCurrentPage(page)}
@@ -945,4 +968,3 @@ function DatastoreDetail() {
 }
 
 export default React.memo(DatastoreDetail);
-

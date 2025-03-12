@@ -51,19 +51,41 @@ export const fetchDatastoreFiles = async (datastoreIds, queryString = '') => {
         }));
       });
 
+      // Collect all unique columns from all files
+      const allColumns = new Set();
+      mockFiles.forEach(file => {
+        Object.keys(file).forEach(key => allColumns.add(key));
+      });
+
+      // Ensure all files have all columns (with null values for missing ones)
+      const normalizedFiles = mockFiles.map(file => {
+        const normalizedFile = {};
+        allColumns.forEach(column => {
+          normalizedFile[column] = file[column] !== undefined ? file[column] : null;
+        });
+        return normalizedFile;
+      });
+
       return {
-        element: mockFiles.sort((a, b) => (b.creationTime || 0) - (a.creationTime || 0))
+        element: normalizedFiles.sort((a, b) => (b.creationTime || 0) - (a.creationTime || 0))
       };
     }
 
     const searchParams = new URLSearchParams(queryString);
     const whereConditions = {};
+    const sortByConditions = {};
     const fromRows = searchParams.get('fromRows') || '0';
     const rows = searchParams.get('rows') || '1000';
     
     searchParams.getAll('where').forEach((where, index) => {
       if (index < datastoreIdArray.length) {
         whereConditions[datastoreIdArray[index]] = where;
+      }
+    });
+    
+    searchParams.getAll('sortBy').forEach((sortBy, index) => {
+      if (index < datastoreIdArray.length) {
+        sortByConditions[datastoreIdArray[index]] = sortBy;
       }
     });
 
@@ -76,7 +98,9 @@ export const fetchDatastoreFiles = async (datastoreIds, queryString = '') => {
           if (whereConditions[datastoreId]) {
             params.append('where', whereConditions[datastoreId]);
           }
-          // Don't pass sortBy parameter to individual requests
+          if (sortByConditions[datastoreId]) {
+            params.append('sortBy', sortByConditions[datastoreId]);
+          }
           params.append('fromRows', fromRows);
           params.append('rows', rows);
 
@@ -105,25 +129,38 @@ export const fetchDatastoreFiles = async (datastoreIds, queryString = '') => {
           return { element: [] };
         } catch (error) {
           console.error(`Failed to fetch files for datastore ${datastoreId}:`, error);
-          return { element: [] };
+          throw error;
         }
       })
     );
 
-    // Combine all responses
+    // Collect all unique columns from all responses
+    const allColumns = new Set();
+    responses.forEach(response => {
+      response.element.forEach(file => {
+        Object.keys(file).forEach(key => allColumns.add(key));
+      });
+    });
+
+    // Normalize all files to have all columns
+    const normalizedFiles = responses.flatMap(response => 
+      response.element.map(file => {
+        const normalizedFile = {};
+        allColumns.forEach(column => {
+          normalizedFile[column] = file[column] !== undefined ? file[column] : null;
+        });
+        return normalizedFile;
+      })
+    );
+
     const combinedResponse = {
-      element: responses.flatMap(response => response.element || []),
+      element: normalizedFiles,
       hasMore: responses.some(response => response.hasMore),
       superCount: responses.reduce((sum, response) => sum + (response.superCount || 0), 0),
       type: responses[0]?.type || "undefined"
     };
 
-    // Sort the combined results
-    combinedResponse.element.sort((a, b) => {
-      const aTime = a.creationTime || (a.processingEndDate ? new Date(a.processingEndDate).getTime() : 0);
-      const bTime = b.creationTime || (b.processingEndDate ? new Date(b.processingEndDate).getTime() : 0);
-      return bTime - aTime; // DESC order
-    });
+    combinedResponse.element.sort((a, b) => (b.creationTime || 0) - (a.creationTime || 0));
 
     return combinedResponse;
   } catch (error) {

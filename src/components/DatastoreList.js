@@ -43,13 +43,6 @@ const CONDITION_OPTIONS = [
   { value: '<=', label: 'Less Than or Equal (<=)' }
 ];
 
-// Maximum date ranges in milliseconds
-const DATE_RANGES = {
-  env1: 24 * 60 * 60 * 1000, // 24 hours
-  env2: 7 * 24 * 60 * 60 * 1000, // 7 days
-  env3: 7 * 24 * 60 * 60 * 1000  // 7 days
-};
-
 function DatastoreList() {
   const [searchFields, setSearchFields] = useState([
     { 
@@ -70,7 +63,29 @@ function DatastoreList() {
   useEffect(() => {
     localStorage.setItem('selected_env', selectedEnv);
     localStorage.setItem('api_url', ENV_CONFIGS[selectedEnv]);
+
+    // Reset date ranges when switching to env2
+    if (selectedEnv === 'env2') {
+      setSearchFields(prev => prev.map(field => ({
+        ...field,
+        dateRange: [null, null]
+      })));
+    }
   }, [selectedEnv]);
+
+  const getDateRangeConfig = () => {
+    if (selectedEnv === 'env2') {
+      const today = new Date();
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(today.getDate() - 7);
+      
+      return {
+        disabledDate: date => date < sevenDaysAgo || date > today,
+        defaultValue: [sevenDaysAgo, today]
+      };
+    }
+    return {};
+  };
 
   const handleAddDatastore = () => {
     setSearchFields([
@@ -139,27 +154,9 @@ function DatastoreList() {
   };
 
   const handleDateRangeChange = (datastoreIndex, value) => {
-    if (!value || !value[0] || !value[1]) {
-      const newFields = [...searchFields];
-      newFields[datastoreIndex].dateRange = [null, null];
-      setSearchFields(newFields);
-      return;
-    }
-
-    const startDate = new Date(value[0]);
-    const endDate = new Date(value[1]);
-    const rangeDuration = endDate.getTime() - startDate.getTime();
-    const maxRange = DATE_RANGES[selectedEnv];
-
-    if (rangeDuration > maxRange) {
-      setError(`Date range cannot exceed ${selectedEnv === 'env1' ? '24 hours' : '7 days'}`);
-      return;
-    }
-
     const newFields = [...searchFields];
     newFields[datastoreIndex].dateRange = value;
     setSearchFields(newFields);
-    setError('');
   };
 
   const convertToUnixTimestamp = (date) => {
@@ -239,17 +236,7 @@ function DatastoreList() {
     return options;
   };
 
-  const getDateRangeHelpText = () => {
-    return selectedEnv === 'env1' 
-      ? 'Maximum range is 24 hours. Times are converted to GMT and Unix timestamps for querying'
-      : 'Maximum range is 7 days. Times are converted to GMT and Unix timestamps for querying';
-  };
-
-  const getDateRangePlaceholder = () => {
-    return selectedEnv === 'env1'
-      ? 'Select date and time range (max 24 hours)'
-      : 'Select date and time range (max 7 days)';
-  };
+  const dateRangeConfig = getDateRangeConfig();
 
   return (
     <div className="container">
@@ -299,25 +286,29 @@ function DatastoreList() {
               </div>
             )}
             
-            <div className="api-url-box">
-              <div className="form-group">
-                <label htmlFor="environment" className="form-label">
-                  Environment<span className="required">*</span>
-                </label>
-                <select
-                  id="environment"
-                  value={selectedEnv}
-                  onChange={(e) => setSelectedEnv(e.target.value)}
-                  className="form-input env-select"
-                >
-                  <option value="env1">Environment 1</option>
-                  <option value="env2">Environment 2</option>
-                  <option value="env3">Environment 3</option>
-                </select>
-                <p className="help-text">
-                  <i className="fas fa-info-circle"></i>
-                  Select the environment to connect to
-                </p>
+            <div className="config-container">
+              <div className="api-url-box">
+                <div className="form-group">
+                  <label htmlFor="environment" className="form-label">
+                    Environment<span className="required">*</span>
+                  </label>
+                  <select
+                    id="environment"
+                    value={selectedEnv}
+                    onChange={(e) => setSelectedEnv(e.target.value)}
+                    className="form-input env-select"
+                  >
+                    <option value="env1">Environment 1</option>
+                    <option value="env2">Environment 2</option>
+                    <option value="env3">Environment 3</option>
+                  </select>
+                  {selectedEnv === 'env2' && (
+                    <p className="help-text">
+                      <i className="fas fa-info-circle"></i>
+                      Date range is restricted to last 7 days in Environment 2
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
             
@@ -372,14 +363,15 @@ function DatastoreList() {
                         className="date-range-picker"
                         value={field.dateRange}
                         onChange={(value) => handleDateRangeChange(datastoreIndex, value)}
-                        placeholder={getDateRangePlaceholder()}
+                        placeholder="Select date and time range"
                         format="yyyy-MM-dd HH:mm:ss"
                         block
                         showMeridian
+                        {...dateRangeConfig}
                       />
                       <p className="help-text">
                         <i className="fas fa-info-circle"></i>
-                        {getDateRangeHelpText()}
+                        Times are converted to GMT and Unix timestamps for querying
                       </p>
                     </div>
 
