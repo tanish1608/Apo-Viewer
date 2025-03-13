@@ -747,89 +747,37 @@ datastore
 ```
 
 
+Key improvements made to the authentication system:
 
-Security Improvements:
-Added SQL Injection Prevention (src/utils/security.js):
-sanitizeValue: Escapes single quotes in strings to prevent SQL injection
-validateWhereCondition: Checks for dangerous SQL keywords and balanced parentheses
-buildSafeWhereClause: Safely constructs WHERE clauses with proper validation
-State Management Improvements:
-Added useLocalStorage Hook:
+Switched to LRUCache for better cache management:
 
-Persists user preferences across sessions
-Handles storage errors gracefully
-Used for:
-Search fields
-Selected environment
-Visible columns
-Sort configuration
-Added useDebounce Hook:
+Automatic TTL handling
+Memory-efficient caching
+Automatic cleanup of old entries
+Added JWT-based authentication:
 
-Improves performance by reducing unnecessary API calls
-Applied to search functionality
-Configurable delay through constants
-Performance Optimizations:
-Filtering Optimization:
+Secure token generation
+Token verification middleware
+Configurable token expiry
+Enhanced security:
 
-Using Sets for faster lookups: statusSet, fileTypeSet, directionSet
-Quick rejection checks before expensive operations
-Optimized search on specific columns only
-Memoization Improvements:
+Switched to POST for auth endpoint
+Added request timeouts
+Secure password handling
+Hash-based cache keys
+Improved rate limiting:
 
-Better dependency arrays in useMemo and useEffect
-Reduced unnecessary re-renders
-Cached expensive calculations
-Code Organization:
-Moved Constants:
+Used express-rate-limit for robust rate limiting
+Configurable windows and limits
+Better error handling
+Better error handling:
 
-All configuration values moved to config/constants.js
-Easier maintenance and configuration
-Single source of truth for important values
-Better Error Handling:
+More specific error messages
+Consistent error format
+Better logging
+Performance optimizations:
 
-Consistent error handling across components
-Proper cleanup in useEffect hooks
-Better error messages for users
-Authentication Improvements:
-Enhanced Session Management:
-More reliable session tracking
-Better activity monitoring
-Proper cleanup of event listeners
-Configurable timeouts and intervals
-Memory Management:
-Proper Cleanup:
-Event listener cleanup in useEffect
-Timeout cleanup in debounce hook
-Better memory usage in large data handling
-Type Safety:
-Better Type Checking:
-Value type validation before operations
-Safer date handling
-Proper null checks
-User Experience:
-Persistent Preferences:
-Column visibility persists across sessions
-Sort preferences are saved
-Search fields are remembered
-Environment selection is preserved
-Data Handling:
-Better Data Processing:
-More efficient filtering
-Safer date conversions
-Better handling of special columns (A_C_K_3, A_C_K_4)
-Improved export functionality
-Error Prevention:
-Added Validation:
-SQL injection prevention
-Input sanitization
-Better error messages
-Proper error boundaries
-These improvements make the application:
-
-More secure against attacks
-Faster and more efficient
-More reliable with better error handling
-More user-friendly with persistent settings
-Better organized and maintainable
-More memory efficient
-More robust against edge cases
+Reduced database queries
+Efficient caching
+Request timeouts
+Optimized token validation
